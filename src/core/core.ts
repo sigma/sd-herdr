@@ -42,18 +42,48 @@ const TIER_COLOUR: Record<AttentionStatus, StateColour> = {
  */
 export const POLL_INTERVAL_MS = 1000;
 
+/**
+ * How old the last good snapshot may get before the face stops being trusted.
+ *
+ * This is a **deadline on the age of the data**, not a count of failures, and
+ * the difference is the point: a failure counter cannot notice a poll that
+ * wedged without ever coming back, so a stalled loop would keep rendering a
+ * confidently green face forever. Measuring age notices, because a wedged loop
+ * produces no events *at all* — which is what the heartbeat below is for.
+ */
+export const STALENESS_DEADLINE_MS = 3000;
+
+/**
+ * The longest gap between retries. Failures back off — one unreachable socket
+ * should not mean one request a second for however long herdr is down — but a
+ * session that comes back must light the tile up again without the user
+ * touching it, so the backoff flattens out rather than growing without bound.
+ */
+export const BACKOFF_CEILING_MS = 5000;
+
+/**
+ * The heartbeat: how often the core is handed the current time with no other
+ * news. Nothing is asked of herdr on a tick; it exists so that the staleness
+ * deadline can pass while *nothing at all* is happening, which is exactly the
+ * wedged-poll case. Its period is the lag between crossing the deadline and
+ * showing it, and half a second of that is imperceptible on a glanceable tile.
+ */
+export const TICK_INTERVAL_MS = 500;
+
 /** What the world tells the core. Every event carries the time it happened. */
 export type CoreEvent =
   | { readonly type: "appeared"; readonly at: number }
   | { readonly type: "disappeared"; readonly at: number }
   | { readonly type: "snapshotTaken"; readonly at: number; readonly snapshot: Snapshot }
   | { readonly type: "snapshotFailed"; readonly at: number }
-  | { readonly type: "pollDue"; readonly at: number };
+  | { readonly type: "pollDue"; readonly at: number }
+  | { readonly type: "tick"; readonly at: number };
 
 /** What the core asks the world for. Data — the adapters decide how. */
 export type Effect =
   | { readonly type: "snapshot"; readonly socketPath: string }
-  | { readonly type: "pollAfter"; readonly ms: number };
+  | { readonly type: "pollAfter"; readonly ms: number }
+  | { readonly type: "tickAfter"; readonly ms: number };
 
 /**
  * The core's state. Deliberately not part of the tested contract: tests drive
@@ -73,13 +103,25 @@ export interface CoreState {
   readonly visible: boolean;
   /** The last snapshot seen, or null for "cannot see the session". */
   readonly snapshot: Snapshot | null;
+  /** When that snapshot arrived — what the staleness deadline is measured from. */
+  readonly snapshotAt: number;
+  /** How many polls in a row have failed. Drives the backoff, and nothing else. */
+  readonly failures: number;
   /** When the last event happened. The core's only notion of time. */
   readonly at: number;
 }
 
 /** A core that has not seen anything yet. */
 export function initial(sessionName: string, socketPath: string): CoreState {
-  return { sessionName, socketPath, visible: false, snapshot: null, at: 0 };
+  return {
+    sessionName,
+    socketPath,
+    visible: false,
+    snapshot: null,
+    snapshotAt: 0,
+    failures: 0,
+    at: 0,
+  };
 }
 
 /** Ask for a snapshot — but only while anyone is looking. */
@@ -89,7 +131,22 @@ function probe(state: CoreState): Effect[] {
 
 /** Come back in a beat — but only while anyone is looking. */
 function schedulePoll(state: CoreState): Effect[] {
-  return state.visible ? [{ type: "pollAfter", ms: POLL_INTERVAL_MS }] : [];
+  return state.visible ? [{ type: "pollAfter", ms: backoff(state.failures) }] : [];
+}
+
+/** Keep the clock coming — but only while anyone is looking. */
+function scheduleTick(state: CoreState): Effect[] {
+  return state.visible ? [{ type: "tickAfter", ms: TICK_INTERVAL_MS }] : [];
+}
+
+/**
+ * How long to wait before the next poll, given how many have failed in a row.
+ * Zero failures is the plain cadence; each further one doubles the gap until it
+ * hits the ceiling.
+ */
+function backoff(failures: number): number {
+  if (failures === 0) return POLL_INTERVAL_MS;
+  return Math.min(POLL_INTERVAL_MS * 2 ** (failures - 1), BACKOFF_CEILING_MS);
 }
 
 /** Fold one event into the state, and say what should happen next. */
@@ -105,33 +162,44 @@ export function reduce(
       // second poll chain running alongside the first.
       if (state.visible) return { state: { ...state, at }, effects: [] };
       const next = { ...state, visible: true, at };
-      return { state: next, effects: probe(next) };
+      return { state: next, effects: [...probe(next), ...scheduleTick(next)] };
     }
 
     case "disappeared":
       return { state: { ...state, visible: false, at }, effects: [] };
 
     case "snapshotTaken": {
-      const next = { ...state, snapshot: event.snapshot, at };
+      // A good snapshot resets the backoff: the session is answering again, so
+      // the next dropped poll starts counting from scratch rather than
+      // inheriting a five-second gap from an outage that is over.
+      const next = { ...state, snapshot: event.snapshot, snapshotAt: at, failures: 0, at };
       return { state: next, effects: schedulePoll(next) };
     }
 
     case "snapshotFailed": {
       // Nothing to give up on: the socket path is a convention rather than a
       // discovery, so a session that comes back comes back on the same path.
-      // Failure means "keep asking".
+      // There is nothing to re-resolve and nothing to rediscover — failure
+      // means "keep asking, less often".
       //
       // The last snapshot is *kept*. One dropped poll is not "cannot see the
-      // session": the face goes grey on a staleness deadline, measured from the
-      // last good snapshot, rather than on a failure count. That deadline is
-      // #21's, and it is what eventually retires the face this holds on to.
-      const next = { ...state, at };
+      // session": the face goes grey on the staleness deadline, measured from
+      // the last good snapshot, rather than on this count. The count decides
+      // only how long to wait before trying again.
+      const next = { ...state, failures: state.failures + 1, at };
       return { state: next, effects: schedulePoll(next) };
     }
 
     case "pollDue": {
       const next = { ...state, at };
       return { state: next, effects: probe(next) };
+    }
+
+    case "tick": {
+      // The heartbeat asks herdr for nothing. It only carries the time in, so
+      // that a deadline can pass while the poll loop is wedged and silent.
+      const next = { ...state, at };
+      return { state: next, effects: scheduleTick(next) };
     }
   }
 }
@@ -141,33 +209,43 @@ export function reduce(
  * state always draws the same face.
  */
 export function face(state: CoreState): FaceDescriptor {
-  if (state.snapshot === null) {
-    // Grey is the one "cannot see anything" state, and is never all-clear. The
-    // nameplate falls back to `herdr` because with no snapshot the plugin
-    // cannot verify the session name it was configured with.
-    //
-    // Two of grey's causes are handled: no snapshot yet, here, and an
-    // unknown-only attention set, below. The staleness deadline and the
-    // settling window are #21's — until they land, a face outlives the last
-    // good snapshot rather than aging out of it.
-    return { stateColour: "grey", nameplate: "herdr", body: "" };
-  }
+  const colour = stateColour(state);
+
+  // Grey is the one "cannot see anything" state, and is never all-clear. Its
+  // plate reads `herdr` whatever the session is called, because grey is
+  // deliberately *one* state: a plate that varied by cause would split on the
+  // face what the colour joins, and the causes are not distinctions the user
+  // can act on differently anyway.
+  if (colour === "grey") return { stateColour: "grey", nameplate: "herdr", body: "" };
+
+  return {
+    stateColour: colour,
+    // `default` is herdr's placeholder rather than a name the user chose, so
+    // the slot buys product identity instead.
+    nameplate: state.sessionName === "default" ? "herdr" : state.sessionName,
+    // The body names the next press target, and there is no press cycle yet.
+    // #24 fills this in against this same seam.
+    body: "",
+  };
+}
+
+/**
+ * The bar colour, and the whole of the grey policy.
+ *
+ * Every cause of "cannot see the session" collapses here into one colour: no
+ * snapshot at all (an unreachable socket, a stopped session, or simply not
+ * having asked yet), data that has aged past the deadline, and an attention set
+ * that is nothing but `unknown` — which is the same statement about a session
+ * the plugin can reach but cannot read.
+ */
+function stateColour(state: CoreState): StateColour {
+  if (state.snapshot === null) return "grey";
+  if (state.at - state.snapshotAt >= STALENESS_DEADLINE_MS) return "grey";
 
   // The attention set is already in priority order, so its head is the most
   // urgent thing in the session and its tier is the colour. Reading the colour
   // off the same ordering the press cycle uses keeps one table in charge of
   // both, rather than a second cascade that has to be kept in step with it.
   const head = attentionSet(state.snapshot.agents)[0];
-
-  return {
-    stateColour: head === undefined ? "dark" : TIER_COLOUR[head.status],
-    // `default` is herdr's placeholder rather than a name the user chose, so
-    // the slot buys product identity instead. Note that grey keeps the real
-    // name here: the `herdr` fallback above is for a face that could not *see*
-    // the session, and a snapshot full of `unknown` agents still verifies it.
-    nameplate: state.sessionName === "default" ? "herdr" : state.sessionName,
-    // The body names the next press target, and there is no press cycle yet.
-    // #24 fills this in against this same seam.
-    body: "",
-  };
+  return head === undefined ? "dark" : TIER_COLOUR[head.status];
 }

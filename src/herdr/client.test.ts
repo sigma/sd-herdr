@@ -49,6 +49,16 @@ describe("decodeSnapshot", () => {
     expect(decodeSnapshot(line).protocol).toBe(19);
   });
 
+  it("treats server_unavailable as a failure, though it is a well-formed response", () => {
+    // The one failure that does not arrive as a socket error: herdr answers,
+    // politely, that it cannot answer. A client that only watched the socket
+    // would read this as a successful poll and hold a confident face over it.
+    const line =
+      '{"id":"s1","error":{"code":"server_unavailable","message":"herdr server is unavailable"}}';
+    expect(() => decodeSnapshot(line)).toThrow(HerdrError);
+    expect(() => decodeSnapshot(line)).toThrow(/unavailable/);
+  });
+
   it("rejects a result that carries no snapshot", () => {
     expect(() => decodeSnapshot('{"id":"s","result":{"type":"session_snapshot"}}')).toThrow(
       /no snapshot/,

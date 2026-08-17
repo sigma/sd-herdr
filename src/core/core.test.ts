@@ -2,7 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import { fixture } from "../testing/fixtures.js";
 import { attentionSet } from "./attention.js";
-import { type CoreEvent, type CoreState, type Effect, face, initial, reduce } from "./core.js";
+import {
+  type CoreEvent,
+  type CoreState,
+  type Effect,
+  face,
+  initial,
+  POLL_INTERVAL_MS,
+  reduce,
+} from "./core.js";
 
 /** Where the `default` session's socket lives, by herdr's path convention. */
 const SOCK = "/Users/dev/.config/herdr/herdr.sock";
@@ -29,6 +37,8 @@ function drive(
 }
 
 const APPEAR: CoreEvent = { type: "appeared", at: 1000 };
+/** The heartbeat that keeps the core's clock moving while nothing else happens. */
+const tickAt = (at: number): CoreEvent => ({ type: "tick", at });
 const snapshotAt = (at: number, name: Parameters<typeof fixture>[0]): CoreEvent => ({
   type: "snapshotTaken",
   at,
@@ -113,7 +123,7 @@ describe("face", () => {
   it("holds its last face through a failed snapshot, rather than flinching grey", () => {
     // Grey is owed to a staleness deadline measured from the last good
     // snapshot, not to a failure count — one dropped poll is not "cannot see
-    // the session". The deadline itself is #21's.
+    // the session".
     const { state } = drive([
       APPEAR,
       snapshotAt(2000, "blocked-one"),
@@ -122,7 +132,7 @@ describe("face", () => {
     expect(face(state).stateColour).toBe("red");
   });
 
-  it("keeps the name it has on the plate when a snapshot fails", () => {
+  it("keeps the name it has on the plate while the last snapshot is still fresh", () => {
     const { state } = drive(
       [APPEAR, snapshotAt(2000, "blocked-one"), { type: "snapshotFailed", at: 3000 }],
       initial("work", SOCK),
@@ -145,7 +155,10 @@ describe("face", () => {
 
 describe("reduce", () => {
   it("snapshots the session's socket as soon as the button appears", () => {
-    expect(drive([APPEAR]).last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+    expect(drive([APPEAR]).last).toEqual([
+      { type: "snapshot", socketPath: SOCK },
+      { type: "tickAfter", ms: 500 },
+    ]);
   });
 
   it("schedules the next poll only after a snapshot completes", () => {
@@ -203,7 +216,10 @@ describe("reduce", () => {
       { type: "disappeared", at: 3000 },
       { type: "appeared", at: 5000 },
     ]);
-    expect(last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+    expect(last).toEqual([
+      { type: "snapshot", socketPath: SOCK },
+      { type: "tickAfter", ms: 500 },
+    ]);
   });
 
   it("returns effects as data — the same event twice produces the same effects", () => {
@@ -224,5 +240,118 @@ describe("reduce", () => {
     const frozen = JSON.stringify(before);
     reduce(before, APPEAR);
     expect(JSON.stringify(before)).toBe(frozen);
+  });
+});
+
+describe("the staleness deadline", () => {
+  /** A good snapshot at 2000, then whatever the test wants to happen after it. */
+  const afterGood = (...events: CoreEvent[]) =>
+    drive([APPEAR, snapshotAt(2000, "blocked-one"), ...events]).state;
+
+  it("keeps the face while the data is younger than the deadline", () => {
+    expect(face(afterGood(tickAt(4999))).stateColour).toBe("red");
+  });
+
+  it("goes grey once the last good snapshot reaches 3 s old", () => {
+    expect(face(afterGood(tickAt(5000))).stateColour).toBe("grey");
+  });
+
+  it("measures the age of the data, not the count of failures", () => {
+    // Four failures inside the deadline do not grey the face…
+    const failing = afterGood(
+      { type: "snapshotFailed", at: 2100 },
+      { type: "snapshotFailed", at: 2400 },
+      { type: "snapshotFailed", at: 3900 },
+      { type: "snapshotFailed", at: 4900 },
+    );
+    expect(face(failing).stateColour).toBe("red");
+    // …and one silent tick past it does, with no failure at all.
+    expect(face(afterGood(tickAt(5100))).stateColour).toBe("grey");
+  });
+
+  it("retires the last good face when the session stops under it", () => {
+    // A stopped session and an unreachable socket arrive as the same rejection,
+    // and both end here: the face survives the first dropped polls, then ages
+    // out into the same grey as a session that was never seen at all.
+    const stopped = afterGood(
+      { type: "snapshotFailed", at: 3000 },
+      { type: "snapshotFailed", at: 4000 },
+      { type: "snapshotFailed", at: 5200 },
+    );
+    expect(face(stopped)).toEqual({ stateColour: "grey", nameplate: "herdr", body: "" });
+  });
+
+  it("goes grey on a poll loop that wedges without ever failing", () => {
+    // The only events are heartbeats: the snapshot request never came back, so
+    // there is neither a success nor a failure to count. A deadline notices
+    // anyway, which is the whole reason it is a deadline.
+    expect(face(afterGood(tickAt(2500), tickAt(3000), tickAt(6000))).stateColour).toBe("grey");
+  });
+
+  it("recovers as soon as a fresh snapshot lands", () => {
+    expect(face(afterGood(tickAt(6000), snapshotAt(6100, "blocked-one"))).stateColour).toBe("red");
+  });
+
+  it("reads herdr on the plate once it is stale, whatever the session is called", () => {
+    const { state } = drive(
+      [APPEAR, snapshotAt(2000, "blocked-one"), tickAt(6000)],
+      initial("work", SOCK),
+    );
+    expect(face(state).nameplate).toBe("herdr");
+  });
+
+  it("reads herdr on the plate for an unknown-only set, because grey is one state", () => {
+    const { state } = drive([APPEAR, snapshotAt(2000, "unknown-only")], initial("work", SOCK));
+    expect(face(state)).toEqual({ stateColour: "grey", nameplate: "herdr", body: "" });
+  });
+});
+
+describe("backoff", () => {
+  const delays = (events: readonly CoreEvent[]) =>
+    drive([APPEAR, ...events])
+      .effects.filter((e) => e.type === "pollAfter")
+      .map((e) => e.ms);
+
+  const failures = (count: number): CoreEvent[] =>
+    Array.from({ length: count }, (_, i) => ({ type: "snapshotFailed", at: 2000 + i * 100 }));
+
+  it("doubles the gap on each consecutive failure, up to a 5 s ceiling", () => {
+    expect(delays(failures(6))).toEqual([1000, 2000, 4000, 5000, 5000, 5000]);
+  });
+
+  it("drops back to the poll cadence as soon as a snapshot lands", () => {
+    expect(delays([...failures(3), snapshotAt(3000, "blocked-one"), ...failures(1)])).toEqual([
+      1000,
+      2000,
+      4000,
+      POLL_INTERVAL_MS,
+      1000,
+    ]);
+  });
+
+  it("recovers without anyone touching the button", () => {
+    const { state } = drive([
+      APPEAR,
+      ...failures(6),
+      { type: "pollDue", at: 9000 },
+      snapshotAt(9100, "blocked-one"),
+    ]);
+    expect(face(state).stateColour).toBe("red");
+  });
+});
+
+describe("the heartbeat", () => {
+  it("keeps beating while the button is on screen", () => {
+    expect(drive([APPEAR, tickAt(1500)]).last).toEqual([{ type: "tickAfter", ms: 500 }]);
+  });
+
+  it("stops with the button, so an invisible tile costs nothing", () => {
+    const { last } = drive([APPEAR, { type: "disappeared", at: 2000 }, tickAt(2500)]);
+    expect(last).toEqual([]);
+  });
+
+  it("does not itself ask herdr for anything", () => {
+    const { effects } = drive([APPEAR, snapshotAt(2000, "blocked-one"), tickAt(2500)]);
+    expect(effects.filter((e) => e.type === "snapshot")).toHaveLength(1);
   });
 });

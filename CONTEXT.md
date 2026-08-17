@@ -189,6 +189,9 @@ A session named `default` renders **`herdr`**: `default` is herdr's placeholder 
 than a name the user chose, so the slot buys product identity instead. Grey falls back to
 `herdr` for a different reason — it cannot verify the name — and the state colour, not the
 text, is what keeps the two apart ([#16](https://github.com/sigma/sd-herdr/issues/16)).
+**Every** grey reads `herdr`, including the `unknown`-only set, whose name a snapshot did
+in fact verify: grey is deliberately one state, and a plate that varied by cause would
+split on the face what the colour joins.
 
 **Grey**:
 The single "cannot see anything" state — unreachable socket, stopped session, stale
@@ -198,6 +201,23 @@ settling window. Deliberately *one* state, and never to be rendered as "all clea
 doing" is the same thing to a user as "I cannot see the session".
 _Avoid_: disconnected, offline, error (these imply a distinction the face does not
 make).
+
+**Staleness deadline**:
+The age — **3 s** — at which the last good snapshot stops being trusted and the face goes
+grey. A *deadline on the age of the data*, never a count of failures: a counter cannot
+notice a poll that wedged without ever returning, and would leave a confident face on the
+key forever. It is measured by a **heartbeat**, a timer that carries the current time into
+the core and asks herdr for nothing, so the deadline can pass while nothing else is
+happening. Decoupled from **settling**, which answers a different question.
+_Avoid_: timeout, failure count.
+
+**Backoff**:
+How long the plugin waits before retrying a snapshot that failed — the poll cadence,
+doubling per consecutive failure to a **5 s ceiling**, reset by the first good snapshot.
+The one thing in the plugin that *is* keyed on a failure count, and it is a separate
+question from the **staleness deadline**: backoff decides how often to ask,
+the deadline decides when to stop believing the last answer. A failure count may set the
+retry gap; it may never set the face.
 
 **Settling**:
 The grey hold after a *server lifetime* boundary, before the face is trusted again — a

@@ -79,9 +79,11 @@ describe("Runner", () => {
     const runner = new Runner("default", SOCK, w.adapters);
 
     runner.appeared();
-    expect(w.pendingDelays()).toEqual([]); // nothing queued while a request is in flight
+    // Only the heartbeat is queued while a request is in flight — no second
+    // poll is scheduled behind the first.
+    expect(w.pendingDelays()).toEqual([500]);
     await w.settle();
-    expect(w.pendingDelays()).toEqual([1000]);
+    expect(w.pendingDelays()).toEqual([500, 1000]);
   });
 
   it("keeps polling the same socket", async () => {
@@ -106,6 +108,7 @@ describe("Runner", () => {
     w.fireTimers();
     await w.settle();
 
+    // The heartbeat stops with the poll: an invisible button costs nothing at all.
     expect(w.pendingDelays()).toEqual([]);
     expect(w.calls).toEqual([`snapshot:${SOCK}`]);
   });
@@ -167,6 +170,62 @@ describe("Runner", () => {
     await w.settle();
 
     expect(w.painted.at(-1)?.stateColour).toBe("grey");
-    expect(w.pendingDelays()).toEqual([1000]);
+    expect(w.pendingDelays()).toEqual([500, 1000]);
+  });
+
+  it("goes grey when a poll wedges and never comes back", async () => {
+    // The hardest failure to see: no rejection to count, no answer to render.
+    // Only the heartbeat still moves, and the staleness deadline rides on it.
+    let wedge = false;
+    const attempts: string[] = [];
+    const w = world({
+      snapshot: async (socketPath) => {
+        attempts.push(socketPath);
+        return wedge ? new Promise<Snapshot>(() => {}) : fixture("blocked-one");
+      },
+    });
+    const runner = new Runner("default", SOCK, w.adapters);
+
+    runner.appeared();
+    await w.settle();
+    expect(w.painted.at(-1)?.stateColour).toBe("red");
+
+    wedge = true;
+    for (let i = 0; i < 5; i += 1) {
+      w.fireTimers();
+      await w.settle();
+    }
+
+    expect(w.painted.at(-1)?.stateColour).toBe("grey");
+    // …and the request really is still hanging: nothing rescheduled behind it.
+    expect(attempts).toEqual([SOCK, SOCK]);
+  });
+
+  it("backs off while the socket stays unreachable, and picks straight back up", async () => {
+    let fail = true;
+    const w = world({
+      async snapshot() {
+        if (fail) throw new Error("ECONNREFUSED");
+        return fixture("blocked-one");
+      },
+    });
+    const runner = new Runner("default", SOCK, w.adapters);
+    const polls: number[] = [];
+
+    runner.appeared();
+    await w.settle();
+    for (let i = 0; i < 4; i += 1) {
+      polls.push(...w.pendingDelays().filter((ms) => ms !== 500));
+      w.fireTimers();
+      await w.settle();
+    }
+    expect(polls).toEqual([1000, 2000, 4000, 5000]);
+
+    fail = false;
+    w.fireTimers();
+    await w.settle();
+
+    expect(w.painted.at(-1)?.stateColour).toBe("red");
+    expect(w.pendingDelays().filter((ms) => ms !== 500)).toEqual([1000]);
   });
 });

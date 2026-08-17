@@ -38,6 +38,12 @@ export interface Adapters {
 export class Runner {
   private state: CoreState;
   private pending: Timer | null = null;
+  /**
+   * The heartbeat, held apart from the poll timer on purpose: a wedged poll
+   * leaves `pending` empty forever, and it is precisely then that the core
+   * still needs the time handed to it.
+   */
+  private beat: Timer | null = null;
   private painted: string | null = null;
 
   constructor(
@@ -60,6 +66,8 @@ export class Runner {
    */
   disappeared(): void {
     this.cancelPending();
+    this.beat?.cancel();
+    this.beat = null;
     this.dispatch({ type: "disappeared", at: this.adapters.now() });
   }
 
@@ -100,6 +108,14 @@ export class Runner {
         this.pending = this.adapters.schedule(effect.ms, () => {
           this.pending = null;
           this.dispatch({ type: "pollDue", at: this.adapters.now() });
+        });
+        return;
+
+      case "tickAfter":
+        this.beat?.cancel();
+        this.beat = this.adapters.schedule(effect.ms, () => {
+          this.beat = null;
+          this.dispatch({ type: "tick", at: this.adapters.now() });
         });
         return;
     }
