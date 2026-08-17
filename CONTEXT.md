@@ -105,7 +105,10 @@ pane calls herdr's `mark_active_tab_seen()`, clearing `seen` on **every** pane i
 tab. So one press consumes every `done` agent in the target's tab. Its accepted
 consequence — **a second `done` agent in a tab is unreachable by button**, since focusing
 its neighbour consumes it first. `blocked` is unaffected, being a reported state rather
-than `idle + !seen`.
+than `idle + !seen`. The face gives **no warning** before it happens
+([#16](https://github.com/sigma/sd-herdr/issues/16)): the cost is one the user cannot
+avoid, so drawing it would spend the pip row's last free axis to no end. The pips'
+hollow-vs-filled axis stays deliberately unused.
 
 **Wrap**:
 The point at which every attention pane is visited, clearing the visited set so the next
@@ -118,9 +121,23 @@ thereafter. **This is what the tile's body names**
 ([#12](https://github.com/sigma/sd-herdr/issues/12)): the body follows the button, the
 state colour keeps urgency. Naming the top-priority agent instead leaves the tile inert
 for an entire cycle of `blocked` agents, since none of them are consumed by being shown.
-How the target is *identified* on the face is open
-([#16](https://github.com/sigma/sd-herdr/issues/16)) — a workspace label no longer
-distinguishes two agents sharing a tab.
+It is drawn as the target's workspace label, plus a **pane index** when the target has an
+**attention sibling** ([#16](https://github.com/sigma/sd-herdr/issues/16)).
+
+**Attention sibling**:
+Another attention pane sharing the target's tab. Its presence is what makes a workspace
+label ambiguous, and is therefore the *only* trigger for the pane index — the face pays
+for disambiguation exactly where it is needed and nowhere else. Not merely another pane
+in the tab: a plain shell alongside the target leaves the label unambiguous, because the
+press can still only go to the one agent.
+
+**Pane index**:
+The target's 1-based position among **every** pane in its tab, agent or shell, in
+geometric order — the snapshot's `layouts[]` entry sorted by `(rect.y, rect.x)`. It
+counts panes rather than agents so that the number names what is on screen, which is the
+only thing the user can check it against: an `agent | shell | agent` tab reads ① and ③.
+Never derived from the `pane_id`, whose suffixes are neither contiguous nor ordered.
+_Avoid_: agent index, pane number (that is the id's suffix, an unrelated counter).
 
 ## The raise
 
@@ -157,12 +174,21 @@ all — and the only one the plugin can take without an Automation grant of its 
 What the tile renders for the current attention set: a state colour (red = any
 `blocked`, amber = `done` only, dark = clear, grey = cannot see the session), a session
 nameplate, a label for the *next press target*, and tier-coloured dots for the
-other waiters. What that label is drawn from is open
-([#16](https://github.com/sigma/sd-herdr/issues/16)): the workspace label was settled
-when a target was a tab, and no longer identifies one of two agents sharing one. The three speak different axes and are allowed to disagree — colour is
+other waiters. The label is the target's workspace, plus a *pane index* when an attention
+sibling shares its tab ([#16](https://github.com/sigma/sd-herdr/issues/16)). The three
+speak different axes and are allowed to disagree — colour is
 the whole session, the label is where the next press goes, the dots are everyone else
 still waiting. In particular a red bar over an amber-tier label is correct, not a bug
 ([#12](https://github.com/sigma/sd-herdr/issues/12)).
+
+**Nameplate**:
+The state-coloured bar across the top of the tile, carrying the session name. It **clips
+with an ellipsis** rather than shrinking to fit — a name shrunk to ~5px is unreadable, and
+so fails the tile's only job, while a legible prefix is enough to tell two sessions apart.
+A session named `default` renders **`herdr`**: `default` is herdr's placeholder rather
+than a name the user chose, so the slot buys product identity instead. Grey falls back to
+`herdr` for a different reason — it cannot verify the name — and the state colour, not the
+text, is what keeps the two apart ([#16](https://github.com/sigma/sd-herdr/issues/16)).
 
 **Grey**:
 The single "cannot see anything" state — unreachable socket, stopped session, stale
