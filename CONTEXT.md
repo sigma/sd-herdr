@@ -25,11 +25,24 @@ _Avoid_: read, acknowledged, dismissed.
 
 **Server lifetime**:
 One run of a herdr server for a session. Topology — workspaces, tabs, panes, focus —
-survives across lifetimes; **agent identity does not**, and herdr never restores it, so
-it returns only when whoever owns the pane re-asserts it. A lifetime ends at a restart
-*or* a live handoff; the two are indistinguishable to a client and need no distinction.
-Its boundary is observable: every pane's `terminal_id` is regenerated while its
-`pane_id` stays put.
+survives across lifetimes; **agent identity does not**, and herdr never *restores* it.
+A lifetime ends at a restart *or* a live handoff, and the two are indistinguishable to a
+client **at the moment they happen** — but they do not resolve alike
+([#13](https://github.com/sigma/sd-herdr/issues/13)): a restart kills the agent processes
+outright, so nothing comes back, while a handoff leaves them running and herdr
+re-**detects** them within ~0.4 s. Since a client cannot tell which it is looking at, one
+policy has to cover both, sized for the handoff. Its boundary is observable: every pane's
+`terminal_id` is regenerated while its `pane_id` stays put.
+
+**Re-detection**:
+How an agent returns after a handoff — herdr identifies it from the pane's foreground
+process on a fixed tick, **never from pane output**, so a silent agent returns as fast as
+a noisy one. It comes back with a *seeded* `Idle` state, held for a 3 s startup grace
+window before the screen is read, which is why agents reappear at ~0.4 s but correct
+statuses only at ~3.7 s. The seed reports `idle` and never `done`, so the tile can only
+under-report during the window, never flash a false red or amber. One casualty: a `done`
+agent returns as plain `idle` and stays there — the `seen` flag is gone and nothing on
+screen recovers it.
 
 **Tab**:
 herdr's unit of visibility — a set of tiled panes, exactly one of which is focused, and
@@ -62,9 +75,14 @@ changes nothing. Ranks of the *raise ladder* are **rungs**, never tiers.
 ## The cycle
 
 **Press**:
-One activation of the button. Its contract is *"show me the tab holding the most urgent
-agent"* — focus that tab's top-ranked pane, then raise the host terminal window. Never
-"advance to the next agent": a press can consume several `done` agents at once.
+One activation of the button. Its contract is *"put the cursor in the most urgent agent"*
+— focus that pane, then raise the host terminal window. What a press must deliver is that
+the agent is **typeable**, not merely visible
+([#15](https://github.com/sigma/sd-herdr/issues/15)); "show me the tab holding the most
+urgent agent" was the earlier reading, and it is the visibility framing that made
+tab-granular stepping look correct. Still never "advance to the next agent": a press can
+consume several `done` agents at once, because focus clears herdr's `seen` for the whole
+tab.
 
 **Visited set**:
 The **pane**-keyed record of which attention panes this cycle has already shown. It is
@@ -73,22 +91,36 @@ cleared on wrap, on `willDisappear`, and on a detected server restart.
 _Avoid_: seen (that is herdr's flag, with different scope and a different owner), read,
 ring cursor.
 
-**Exhausted tab**:
-A tab all of whose attention panes are in the visited set. Selection skips it. A new
-agent appearing in such a tab un-exhausts it, which is why the visited set is keyed by
-pane while stepping happens in tabs.
+**Stepping**:
+How selection advances press to press: **pane-granular**, over the pane-keyed visited set
+([#15](https://github.com/sigma/sd-herdr/issues/15)). Focus lands on one pane, so two
+agents tiled in one tab need two presses — that second press is not waste, it is the only
+way to get the cursor into the second agent.
+_Avoid_: tab-granular stepping, ranked tabs, exhausted tab — all deleted with the
+visibility framing that justified them.
+
+**Tab-scoped consumption**:
+The reason `tabId` survives in the model despite pane-granular stepping: focusing any
+pane calls herdr's `mark_active_tab_seen()`, clearing `seen` on **every** pane in that
+tab. So one press consumes every `done` agent in the target's tab. Its accepted
+consequence — **a second `done` agent in a tab is unreachable by button**, since focusing
+its neighbour consumes it first. `blocked` is unaffected, being a reported state rather
+than `idle + !seen`.
 
 **Wrap**:
-The point at which every tab is exhausted, clearing the visited set so the next press
-returns to the top of the priority order.
+The point at which every attention pane is visited, clearing the visited set so the next
+press returns to the top of the priority order.
 
 **Next press target**:
-The top-ranked non-exhausted tab — where the button will actually take the user. Equal
-to the top-priority agent's tab at the start of a cycle, and divergent from it
+The highest-priority pane not in the visited set — where the button will actually take
+the user. Equal to the top-priority agent at the start of a cycle, and divergent from it
 thereafter. **This is what the tile's body names**
 ([#12](https://github.com/sigma/sd-herdr/issues/12)): the body follows the button, the
 state colour keeps urgency. Naming the top-priority agent instead leaves the tile inert
 for an entire cycle of `blocked` agents, since none of them are consumed by being shown.
+How the target is *identified* on the face is open
+([#16](https://github.com/sigma/sd-herdr/issues/16)) — a workspace label no longer
+distinguishes two agents sharing a tab.
 
 ## The raise
 
@@ -124,8 +156,10 @@ all — and the only one the plugin can take without an Automation grant of its 
 **Face**:
 What the tile renders for the current attention set: a state colour (red = any
 `blocked`, amber = `done` only, dark = clear, grey = cannot see the session), a session
-nameplate, the *next press target*'s workspace label, and tier-coloured dots for the
-other waiters. The three speak different axes and are allowed to disagree — colour is
+nameplate, a label for the *next press target*, and tier-coloured dots for the
+other waiters. What that label is drawn from is open
+([#16](https://github.com/sigma/sd-herdr/issues/16)): the workspace label was settled
+when a target was a tab, and no longer identifies one of two agents sharing one. The three speak different axes and are allowed to disagree — colour is
 the whole session, the label is where the next press goes, the dots are everyone else
 still waiting. In particular a red bar over an amber-tier label is correct, not a bug
 ([#12](https://github.com/sigma/sd-herdr/issues/12)).
@@ -140,12 +174,16 @@ _Avoid_: disconnected, offline, error (these imply a distinction the face does n
 make).
 
 **Settling**:
-The brief grey hold after a *server lifetime* boundary, before the face
-is trusted again. It exists only to avoid flashing a wrong face during the transition —
-*not* to wait for agents to come back, because they may never. Ends on a fixed timer,
-after which a dark face is honest: a herdr that has forgotten its agents genuinely has
-none.
-_Avoid_: reconnecting, recovering (both imply the agents are on their way back).
+The grey hold after a *server lifetime* boundary, before the face is trusted again — a
+**fixed 4 s** on a `terminal_id` change, and the one place the plugin deliberately
+overrides its own data: the snapshot says dark, but the plugin knows the data is
+untrustworthy for ~3.7 s. Sized for the handoff's measured worst case
+([#13](https://github.com/sigma/sd-herdr/issues/13)) because the two boundary shapes are
+indistinguishable when they happen. **Decoupled** from the staleness deadline, which
+answers a different question. Ends on a fixed timer — after a restart a dark face is
+honest, since a herdr whose agent processes are dead genuinely has none.
+_Avoid_: reconnecting, recovering (both imply the agents are on their way back — true
+only of a handoff, and only for `blocked` agents).
 
 **Nonce**:
 The human-legible marker the plugin writes into herdr's `client_window_title` to
