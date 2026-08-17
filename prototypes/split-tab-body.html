@@ -1,0 +1,684 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>PROTOTYPE — what does the tile body name when two agents share a tab?</title>
+<!--
+  THROWAWAY PROTOTYPE for sd-herdr issue #16.
+
+  #12 settled: the body names the NEXT PRESS TARGET, rendered as its workspace label.
+  #15 made stepping PANE-granular. So the target is a pane, and two agents split into
+  one workspace render the same body — the tile stops saying which one the press
+  will focus, breaking the one contract #12 said it must not break.
+
+  The pure module below is #15's model: pane-granular stepping, pane-keyed visited
+  set, tab-scoped `done` consumption. rankedTabs/exhausted are gone.
+
+  SETTLED (2026-08-17): candidate B — the workspace label, plus a pane index shown
+  ONLY when another attention pane shares the target's tab. Index counts PANES, not
+  agents, so an agent|shell|agent tab reads ① and ③: the number is checkable against
+  what is on screen. Plate clips with … and reads `herdr` when the session is
+  `default`. Pips unchanged — the sibling gets no ring.
+
+  MEASURED, not assumed (session.snapshot on ~/.config/herdr/herdr.sock, 2026-08-17):
+    - The snapshot carries a top-level `layouts[]`, one entry per tab, with a per-pane
+      `rect` {x,y,width,height} and the split tree. So the pane index is DERIVABLE
+      FROM GEOMETRY — sort a tab's panes by (y, x) — exactly, for nested and vertical
+      splits as well, at zero cost: it is already in the poll the plugin runs anyway.
+    - `agents[]` is the flat, pre-filtered attention source and carries
+      `state_change_seq`, but NO geometry. The plugin joins agents[] → layouts[] on
+      `pane_id`. `panes[]` array order happens to match geometry too, but that is an
+      accident to lean on only if layouts[] ever goes missing.
+    - pane.edges / pane.layout are NOT needed. (pane.layout is also broken for this:
+      it ignores its tab_id param and only ever answers for the focused tab.)
+    - pane ids are NOT contiguous (wX has p1, p3), so the index must come from
+      position within the tab, never from the id.
+    - `layouts[].zoomed` exists — an unexplored case: a zoomed pane hides its
+      siblings, so "① of ③" may name something the user cannot see.
+-->
+<style>
+  :root {
+    --bg: #0a0b0e; --panel: #14161b; --line: #23262d;
+    --ink: #e6e8ec; --dim: #868c98; --accent: #E8A317; --bad: #ef8f8f; --good: #6fce93;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 36px 90px; background: var(--bg); color: var(--ink);
+    font: 14px/1.55 ui-sans-serif, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  h1 { font-size: 19px; margin: 0 0 6px; font-weight: 650; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+       color: var(--dim); font-weight: 600; margin: 0 0 12px; }
+  .lede { color: var(--dim); max-width: 80ch; margin: 0 0 26px; }
+  .lede b { color: var(--ink); font-weight: 600; }
+  a { color: var(--accent); }
+  .wrap { display: grid; grid-template-columns: minmax(0,1fr) 400px; gap: 30px;
+          align-items: start; max-width: 1320px; }
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 10px; padding: 18px 20px; margin-bottom: 22px; }
+
+  .cands { display: grid; gap: 20px; }
+  .cand { display: grid; grid-template-columns: 96px 1fr; gap: 16px; align-items: start; }
+  .cand h3 { font-size: 13px; margin: 0 0 2px; font-weight: 650; }
+  .cand p { font-size: 12px; color: var(--dim); margin: 0; }
+  .badge { display: inline-block; font-size: 10px; letter-spacing: .05em;
+    text-transform: uppercase; padding: 2px 6px; border-radius: 4px; margin-top: 7px;
+    background: #1d2028; color: var(--dim); }
+  .badge.lie { background: #3a1414; color: var(--bad); }
+  .badge.ok  { background: #12271a; color: var(--good); }
+
+  table.st { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  table.st th { text-align: left; color: var(--dim); font-weight: 500;
+    padding: 0 8px 7px 0; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  table.st td { padding: 4px 8px 4px 0; border-top: 1px solid var(--line); }
+  table.st tr.visited td { color: #5c626e; }
+  table.st tr.target td { background: #191d17; }
+  .chip { display: inline-block; padding: 1px 7px; border-radius: 999px;
+          font-size: 11px; font-weight: 600; }
+  .chip.blocked { background: #3a1010; color: #ff8f8f; }
+  .chip.done    { background: #3a2c08; color: #f3c565; }
+  .chip.unknown { background: #24272e; color: #9aa0aa; }
+  .chip.idle, .chip.working { background: #181b21; color: #666c78; }
+  .mark { color: var(--accent); font-weight: 700; }
+  .sib { color: #7fb2ff; font-weight: 600; }
+
+  .agents { display: grid; gap: 5px; }
+  .arow { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: center; }
+  .arow .name { font-size: 12px; color: var(--dim); text-align: right;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .segs { display: flex; gap: 4px; }
+  button {
+    font: inherit; font-size: 12px; cursor: pointer; color: var(--ink);
+    background: #1c1f26; border: 1px solid #2b2f38; border-radius: 6px; padding: 4px 9px;
+  }
+  button:hover { border-color: #454b58; }
+  button.on { background: var(--accent); border-color: var(--accent); color: #14161b; font-weight: 650; }
+  button.big { padding: 9px 18px; font-size: 14px; font-weight: 650;
+               background: var(--accent); border-color: var(--accent); color: #14161b; }
+  button.done { opacity: .45; }
+  button:disabled { opacity: .35; cursor: default; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  input[type=text] { font: inherit; font-size: 12px; background: #1c1f26; color: var(--ink);
+    border: 1px solid #2b2f38; border-radius: 6px; padding: 4px 8px; width: 150px; }
+  label.ck { font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 6px; }
+
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .steps { display: grid; gap: 7px; margin-top: 12px; }
+  .step { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: baseline; }
+  .step .n { color: var(--dim); font-size: 11px; text-align: right; }
+  .watch { font-size: 12.5px; color: var(--dim); border-left: 2px solid var(--accent);
+           padding-left: 12px; margin: 10px 0 0; }
+  .log { font-size: 12px; color: var(--dim); margin-top: 14px;
+         max-height: 160px; overflow-y: auto; }
+  .log div { padding: 2px 0; border-top: 1px solid var(--line); }
+  .log div:first-child { color: var(--ink); border-top: 0; }
+  .plates { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+  .plate figcaption { font-size: 11px; color: var(--dim); margin-top: 5px; text-align: center;
+                      max-width: 96px; }
+  figure { margin: 0; }
+</style>
+
+<h1>Split tab — the body names a <em>pane</em> now. Which pane?</h1>
+<p class="lede">
+  <a href="https://github.com/sigma/sd-herdr/issues/12">#12</a> put the <b>next press target</b> in the
+  tile body and drew it as a <b>workspace label</b> — correct while a target was a tab and every tab held
+  one agent. <a href="https://github.com/sigma/sd-herdr/issues/15">#15</a> made stepping
+  <b>pane-granular</b>, because a press must leave the agent <em>typeable</em>, not merely visible.
+  Two agents split into one workspace now render the <b>same body twice</b>. Load the split fixture,
+  press, and watch which candidate still tells you where the button is about to put your cursor.
+  <br><br>
+  <b style="color:var(--good)">Settled: candidate B</b> — the workspace label, plus a
+  <b>pane index only when another attention pane shares the tab</b>. The common case renders
+  exactly what #12 shipped; the index counts panes so it is checkable against the screen, and
+  comes free from the snapshot's <code>layouts[]</code> geometry.
+</p>
+
+<div class="wrap">
+<div>
+
+  <div class="panel">
+    <h2>Candidate bodies</h2>
+    <div class="cands" id="cands"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Attention set — priority order</h2>
+    <table class="st"><thead><tr>
+      <th>workspace</th><th>pane</th><th>agent title</th><th>status</th><th>seq</th><th></th>
+    </tr></thead><tbody id="setrows"></tbody></table>
+    <p class="watch" id="verdict"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Press the button</h2>
+    <div class="row">
+      <button class="big" id="press">▶ Press</button>
+      <button id="reset">Reset cycle (clear visited)</button>
+      <button id="disappear">willDisappear</button>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Nameplate edge cases <span style="text-transform:none;letter-spacing:0">— folded in from #4</span></h2>
+    <div class="row" style="margin-bottom:14px">
+      <label class="ck">session name <input type="text" id="sessname" value="default"></label>
+      <button data-sess="default">default</button>
+      <button data-sess="work">work</button>
+      <button data-sess="arbora-partners-infra">arbora-partners-infra</button>
+    </div>
+    <div class="plates" id="plates"></div>
+    <p class="watch">
+      Both settled. <b>Clip with …</b>, because shrink-to-fit drives a 21-char name to ~5px
+      and an unreadable plate fails the tile's only job, while a legible prefix is enough to
+      tell two sessions apart. And a <code>default</code> session renders <b><code>herdr</code></b>
+      — <code>default</code> is herdr's placeholder, not a name the user chose, so the slot
+      buys product identity instead. Grey already falls back to <code>herdr</code>; the state
+      colour is what keeps the two apart, not the text.
+    </p>
+  </div>
+
+</div>
+
+<div>
+  <div class="panel">
+    <h2>Fixture</h2>
+    <div class="row" id="fixpick" style="margin-bottom:10px"></div>
+    <p id="fixdesc" style="font-size:12.5px;color:var(--dim);margin:0"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Guided walkthroughs</h2>
+    <div class="tabs" id="wtabs"></div>
+    <p id="wdesc" style="font-size:12.5px;color:var(--dim);margin:0"></p>
+    <div class="steps" id="wsteps"></div>
+    <p class="watch" id="wwatch"></p>
+  </div>
+
+  <div class="panel">
+    <h2>Pip row — settled: unchanged</h2>
+    <label class="ck"><input type="checkbox" id="sibpip"> mark the same-tab sibling's pip
+      <span style="color:#5c626e">(rejected — kept for the record)</span></label>
+    <p style="font-size:12px;color:var(--dim);margin:8px 0 0">
+      The tab-scoped consumption a ring would warn about is #15's <em>accepted</em> cost.
+      Drawing it spends the pip row's last free axis on a case that only exists in split
+      tabs, to warn about something the user cannot avoid. It stays in the spec's prose,
+      not on the face — and the pips' hollow-vs-filled axis stays deliberately unused.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h2>Free play</h2>
+    <div class="agents" id="agents"></div>
+  </div>
+</div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   THE PURE MODULE — attention model + press-cycle reducer, as #15 left it.
+   Pane-granular stepping. No rankedTabs, no exhausted. No DOM in here.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* An agent as the plugin sees it in a session.snapshot pane record:
+     { paneId, tabId, workspace, title, paneIx, tabPanes, status, seq }
+   `paneIx` is the pane's 1-based position among its tab's panes in GEOMETRIC
+   order — sort the tab's `layouts[]` entry by (rect.y, rect.x). It counts every
+   pane, agent or shell, so an agent|shell|agent tab yields ① and ③: the number
+   names what is on screen, which is the only thing the user can check it against. */
+
+const TIER = { blocked: 0, done: 1, unknown: 2 };
+
+/** The attention set, in priority order: blocked → done → unknown,
+ *  lowest seq first within a tier (longest wait wins). */
+function attentionSet(agents) {
+  return agents
+    .filter(a => a.status in TIER)
+    .sort((x, y) => TIER[x.status] - TIER[y.status] || x.seq - y.seq);
+}
+
+/** Where the next press goes: the highest-priority pane not yet visited. */
+const nextPressTarget = (ordered, visited) =>
+  ordered.find(a => !visited.has(a.paneId)) ?? null;
+
+/** The other attention panes sharing the target's tab. THIS is the ambiguity:
+ *  a workspace label cannot tell the target apart from any of these. */
+const tabSiblings = (target, ordered) =>
+  target ? ordered.filter(a => a.tabId === target.tabId && a.paneId !== target.paneId) : [];
+
+/** The reducer. state = { visited:Set<paneId> }. Pure. */
+function press(agents, visited) {
+  const events = [];
+  const ordered = attentionSet(agents);
+  const target = nextPressTarget(ordered, visited);
+  let next = new Set(visited);
+  let out = agents;
+
+  if (!target) {
+    events.push('Attention set empty — raise the window, focus nothing.');
+    return { agents: out, visited: next, events };
+  }
+
+  events.push(`Focus pane ${target.paneId} (${target.workspace}), then raise the window.`);
+
+  // Focus clears herdr's `seen` for EVERY pane in the tab (#6), so every `done`
+  // agent there flips to idle synchronously — including ones we never showed.
+  out = agents.map(a => {
+    if (a.tabId !== target.tabId) return a;
+    if (a.status === 'done') {
+      const who = a.paneId === target.paneId ? '' : ' (the sibling we never showed)';
+      events.push(`  ${a.workspace} p${a.paneIx} was done → focus consumed it → idle${who}.`);
+      return { ...a, status: 'idle' };
+    }
+    if (a.status === 'blocked' && a.paneId !== target.paneId)
+      events.push(`  ${a.workspace} p${a.paneIx} is blocked → untouched, still needs its own press.`);
+    return a;
+  });
+
+  // Pane-granular: only the focused pane is visited (#15).
+  next.add(target.paneId);
+
+  // Prune to panes still in the attention set — never reset on change (#8).
+  const live = new Set(attentionSet(out).map(a => a.paneId));
+  for (const p of [...next]) if (!live.has(p)) next.delete(p);
+
+  // Wrap: every attention pane visited → clear, next press returns to the top.
+  const after = attentionSet(out);
+  if (after.length && after.every(a => next.has(a.paneId))) {
+    events.push('Every attention pane visited → WRAP. Visited set cleared.');
+    next = new Set();
+  }
+  return { agents: out, visited: next, events };
+}
+
+/* ── Candidate bodies ──────────────────────────────────────────────────────
+   Each returns the string(s) the tile draws for the target. `sibs` is the
+   target's same-tab attention siblings — empty in the common case, which is
+   the whole point of the "only when needed" candidates.                    */
+
+const GENERIC = /^(claude code|codex|agent|node|zsh|fish|bash)$/i;
+const useful = t => t && !GENERIC.test(t.trim());
+const clip = (s, n) => s.length <= n ? s : s.slice(0, n - 1).trimEnd() + '…';
+
+const BODIES = {
+  ws: {
+    name: 'A — workspace label only  ✗ rejected',
+    blurb: 'What #12 prototyped. Renders “nix” for every press of a split-tab cycle — the '
+         + 'same inert face #12 rejected the top-priority candidate for, one level down.',
+    render: t => [t.workspace],
+  },
+  wsIx: {
+    name: 'B — workspace, + pane index only when ambiguous  ✓ SETTLED',
+    blurb: 'Keeps #12’s glanceable case byte-identical, pays for disambiguation only where '
+         + 'a sibling is also waiting. The index counts PANES (agent|shell|agent reads ① ③) '
+         + 'so it is checkable against the screen, and comes from layouts[] geometry — free.',
+    render: (t, sibs) => sibs.length ? [`${t.workspace} ${sup(t.paneIx)}`] : [t.workspace],
+  },
+  wsSide: {
+    name: 'C — workspace, + positional hint when ambiguous  ✗ rejected',
+    blurb: 'Says where to look rather than counting — but the middle pane of a three-way '
+         + 'split has no edge to point at, so a positional hint stops being positional.',
+    render: (t, sibs) => sibs.length
+      ? [`${t.workspace} ${t.paneIx === 1 ? '◧' : t.paneIx === t.tabPanes ? '◨' : '◫'}`]
+      : [t.workspace],
+  },
+  title: {
+    name: 'D — always the agent title, workspace as fallback  ✗ rejected',
+    blurb: 'Fails twice: two fresh agents both read “Claude Code”, so it degrades to A at '
+         + 'exactly the moment you spawn a helper — and it changes #12’s settled common '
+         + 'case (“trunk” becomes “Proof of conce…”) to lose the case it was brought in for.',
+    render: t => [useful(t.title) ? clip(t.title, 15) : t.workspace],
+  },
+  wsTitle: {
+    name: 'E — workspace, + clipped title on a second line when ambiguous  ✗ rejected',
+    blurb: 'Collapses into B whenever the title is generic, and changes the tile’s line '
+         + 'count mid-cycle — the pip row loses and regains its space as you step.',
+    render: (t, sibs) => sibs.length && useful(t.title)
+      ? [t.workspace, clip(t.title, 13)]
+      : sibs.length ? [`${t.workspace} ${sup(t.paneIx)}`] : [t.workspace],
+  },
+};
+const sup = n => ['','①','②','③','④','⑤','⑥'][n] ?? `·${n}`;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   THROWAWAY PAGE BELOW — tile renderer lifted from the #4 / #12 prototypes.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const C = { blocked:'#C62828', done:'#E8A317', clear:'#101216', unseen:'#33363D',
+            slash:'#6C7079', ink:'#FFFFFF', inkDim:'#767B85', sib:'#7fb2ff' };
+
+const fit = (s, box = 62, max = 22) => Math.min(max, Math.floor(box / (s.length * 0.58)));
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const txt = (s, {x=36, y=36, size=16, fill=C.ink, weight=600}) =>
+  `<text x="${x}" y="${y}" fill="${fill}" font-size="${size}" font-weight="${weight}"
+     text-anchor="middle" dominant-baseline="central"
+     font-family="ui-sans-serif,-apple-system,Helvetica,Arial,sans-serif">${esc(s)}</text>`;
+
+let SESSION = 'default';
+let PLATE_MODE = 'clip';           // SETTLED: clip. shrink drives a 21-char name to
+                                   // ~5px, which fails the tile's only job.
+// SETTLED: `default` is herdr's placeholder, not a name the user chose, so the plate
+// spends the slot on product identity instead. Grey already falls back to `herdr`;
+// the state colour is what keeps the two apart.
+const plateText = () => SESSION === 'default' ? 'herdr' : SESSION;
+
+const bar = (fill, label = plateText()) => {
+  const ink = fill === C.done ? '#2a1e00' : fill === C.blocked ? 'rgba(255,255,255,.92)' : '#666c78';
+  const shown = PLATE_MODE === 'clip' ? clip(label, 12) : label;
+  const size = Math.max(5, Math.min(9, Math.floor(66 / (shown.length * 0.52))));
+  return `<rect width="72" height="13" fill="${fill}"/>` +
+         txt(shown, {y:7, size, fill:ink, weight:700});
+};
+
+const PIP_CAP = 4;
+function pipRow(pips, y) {
+  if (!pips.length) return '';
+  const shown = pips.slice(0, PIP_CAP), more = pips.length > PIP_CAP;
+  const r = 4, gap = 11, ell = 13;
+  const width = (shown.length - 1) * gap + (more ? ell : 0);
+  const cx0 = 36 - width / 2;
+  const body = shown.map((p, i) => {
+    const col = p.status === 'blocked' ? C.blocked : p.status === 'done' ? C.done : C.unseen;
+    const cx = cx0 + i * gap;
+    // A sibling pip gets a ring: it is the one the NEXT press reaches without
+    // moving the window, which is a different relationship from the rest.
+    return p.sib
+      ? `<circle cx="${cx}" cy="${y}" r="${r}" fill="${col}"/>` +
+        `<circle cx="${cx}" cy="${y}" r="${r + 2.2}" fill="none" stroke="${C.sib}" stroke-width="1.3"/>`
+      : `<circle cx="${cx}" cy="${y}" r="${r}" fill="${col}"/>`;
+  }).join('');
+  const tail = more ? txt('…', {x: cx0 + (shown.length-1)*gap + ell, y: y-2, size:18, fill:C.inkDim}) : '';
+  return body + tail;
+}
+
+/** The whole tile. `lines` is null when the attention set is empty. */
+function tileSVG(lines, pips, ordered) {
+  const anyBlocked = ordered.some(a => a.status === 'blocked');
+  const anyDone    = ordered.some(a => a.status === 'done');
+  const onlyUnknown = ordered.length > 0 && !anyBlocked && !anyDone;
+  const fill = onlyUnknown ? C.unseen : anyBlocked ? C.blocked : anyDone ? C.done : '#23262c';
+  const open = `<svg viewBox="0 0 72 72" width="96" height="96"
+    style="border-radius:11px;display:block" xmlns="http://www.w3.org/2000/svg">`;
+  const ground = `<rect width="72" height="72" fill="#101216"/>`;
+  if (!lines) return open + ground + bar('#23262c') + txt('clear',{y:44,size:16,fill:C.inkDim}) + `</svg>`;
+  if (onlyUnknown) return open + ground + bar(C.unseen, 'herdr') + txt('no',{y:36,size:17,fill:C.slash})
+                        + txt('session',{y:54,size:15,fill:C.slash}) + `</svg>`;
+
+  const hasPips = pips.length > 0;
+  let body;
+  if (lines.length === 2) {
+    body = txt(lines[0], {y: hasPips ? 31 : 36, size: Math.min(15, fit(lines[0]))})
+         + txt(lines[1], {y: hasPips ? 45 : 50, size: Math.min(11, fit(lines[1], 64, 11)), fill: C.inkDim});
+  } else {
+    body = txt(lines[0], {y: hasPips ? 38 : 44, size: fit(lines[0])});
+  }
+  return open + ground + bar(fill) + body + pipRow(pips, 59) + `</svg>`;
+}
+
+/* ───────────────────────────────────────────────────────── fixtures ────── */
+/* Pane records shaped like the real snapshot. Workspace labels, cwds and agent
+   titles are lifted verbatim from `session.snapshot` on the live session; the
+   SECOND agent in a split tab is CONSTRUCTED — the live session's second panes
+   are all plain shells. #15 established that spawning agents from agents is the
+   point of herdr, so a two-agent tab is the load state, not a rare shape. */
+
+const mk = (paneId, tabId, workspace, title, paneIx, tabPanes, seq) =>
+  ({ paneId, tabId, workspace, title, paneIx, tabPanes, status: 'idle', seq });
+
+const FIXTURES = {
+  split: {
+    name: 'Split tab (2 agents)',
+    desc: 'The live session with one workspace split into two working agents — the shape '
+        + '#16 exists for. Note nix ① and nix ② share a tab, a cwd, and (until one of them '
+        + 'is named) a title.',
+    agents: [
+      mk('wX:p1',  'wX:t1',  'IaC',          'Claude Code',                      1, 2, 10),
+      mk('w0:p1',  'w0:t1',  'nix',          'Fix fish prompt caret direction',  1, 2, 20),
+      mk('w0:p2',  'w0:t1',  'nix',          'Claude Code',                      2, 2, 25),
+      mk('w11:p4', 'w11:t1', 'gmailctl-cfg', 'Undo mistaken commit psvwzvsr on main', 1, 2, 30),
+      mk('w13:p1', 'w13:t1', 'playpen',      'Claude Code',                      1, 2, 40),
+      mk('w15:p1', 'w15:t1', 'sd-herdr',     'Extend the press-cycle prototype', 1, 2, 50),
+    ],
+  },
+  fresh: {
+    name: 'Split tab, both fresh',
+    desc: 'The hard case for candidate D: two agents just spawned into one tab, both '
+        + 'reporting the generic title `Claude Code`, same cwd. Nothing but position '
+        + 'tells them apart.',
+    agents: [
+      mk('w0:p1',  'w0:t1',  'nix',      'Claude Code', 1, 2, 20),
+      mk('w0:p2',  'w0:t1',  'nix',      'Claude Code', 2, 2, 25),
+      mk('w15:p1', 'w15:t1', 'sd-herdr', 'Extend the press-cycle prototype', 1, 2, 50),
+    ],
+  },
+  three: {
+    name: 'Three-way split',
+    desc: 'One tab, three agents. Left/right stops being a two-valued answer, and the '
+        + 'middle pane has no edge to point at.',
+    agents: [
+      mk('w0:p1', 'w0:t1', 'nix', 'Fix fish prompt caret direction', 1, 3, 20),
+      mk('w0:p2', 'w0:t1', 'nix', 'Claude Code',                     2, 3, 25),
+      mk('w0:p5', 'w0:t1', 'nix', 'Claude Code',                     3, 3, 28),
+    ],
+  },
+  solo: {
+    name: 'One agent per tab (#12’s fixture)',
+    desc: 'The steady state #12 prototyped against. Every candidate must leave this case '
+        + 'looking exactly like #12 shipped it — a disambiguator that fires here is a cost '
+        + 'with no benefit.',
+    agents: [
+      mk('wX:p1',  'wX:t1',  'IaC',          'Claude Code',                      1, 2, 10),
+      mk('wZ:p1',  'wZ:t1',  'trunk',        'Proof of concept for Fathom pipeline', 1, 2, 20),
+      mk('w0:p1',  'w0:t1',  'nix',          'Fix fish prompt caret direction',  1, 2, 30),
+      mk('w11:p4', 'w11:t1', 'gmailctl-cfg', 'Undo mistaken commit psvwzvsr on main', 1, 2, 40),
+      mk('w13:p1', 'w13:t1', 'playpen',      'Claude Code',                      1, 2, 50),
+      mk('w14:p1', 'w14:t1', 'infra',        'Create StreamDeck plugin repository', 1, 2, 60),
+      mk('w15:p1', 'w15:t1', 'sd-herdr',     'Extend the press-cycle prototype', 1, 2, 70),
+    ],
+  },
+};
+
+const STATUSES = ['blocked', 'done', 'unknown', 'idle', 'working'];
+
+/* ───────────────────────────────────────────────────────── app state ───── */
+let fixKey = 'split';
+let agents = FIXTURES[fixKey].agents.map(a => ({ ...a }));
+let visited = new Set();
+let seqTick = 100;
+let log = [];
+let sibPip = false;
+
+function setStatus(paneId, status) {
+  agents = agents.map(a => a.paneId === paneId ? { ...a, status, seq: seqTick++ } : a);
+  const live = new Set(attentionSet(agents).map(a => a.paneId));
+  for (const p of [...visited]) if (!live.has(p)) visited.delete(p);
+  const a = agents.find(x => x.paneId === paneId);
+  say(`${a.workspace} p${a.paneIx} → ${status}`);
+}
+function say(...lines) { log = [...lines, ...log].slice(0, 40); render(); }
+
+/* ───────────────────────────────────────────────────────── rendering ───── */
+const $ = id => document.getElementById(id);
+
+function pipsFor(target, ordered, sibs) {
+  const sibIds = new Set(sibs.map(s => s.paneId));
+  return ordered.filter(a => a.paneId !== (target && target.paneId))
+                .map(a => ({ status: a.status, sib: sibPip && sibIds.has(a.paneId) }));
+}
+
+function render() {
+  SESSION = $('sessname').value || 'default';
+  const ordered = attentionSet(agents);
+  const target  = nextPressTarget(ordered, visited);
+  const sibs    = tabSiblings(target, ordered);
+  const pips    = pipsFor(target, ordered, sibs);
+
+  $('cands').innerHTML = Object.entries(BODIES).map(([key, c]) => {
+    const lines = target ? c.render(target, sibs) : null;
+    let badge = '';
+    if (target && sibs.length) {
+      // Does this body distinguish the target from every same-tab sibling?
+      const mine = JSON.stringify(lines);
+      const collides = sibs.find(s => JSON.stringify(c.render(s, tabSiblings(s, ordered))) === mine);
+      badge = collides
+        ? `<span class="badge lie">same body as ${collides.workspace} p${collides.paneIx} — ambiguous</span>`
+        : `<span class="badge ok">distinguishes the target</span>`;
+    } else if (target) {
+      badge = `<span class="badge">no sibling — common case</span>`;
+    }
+    return `<div class="cand">${tileSVG(lines, pips, ordered)}
+      <div><h3>${esc(c.name)}</h3><p>${esc(c.blurb)}</p>${badge}</div></div>`;
+  }).join('');
+
+  const sibIds = new Set(sibs.map(s => s.paneId));
+  $('setrows').innerHTML = ordered.length ? ordered.map(a => {
+    const isTarget = target && a.paneId === target.paneId;
+    const cls = [visited.has(a.paneId) ? 'visited' : '', isTarget ? 'target' : ''].join(' ');
+    return `<tr class="${cls}"><td>${esc(a.workspace)}</td>
+      <td>${esc(a.paneId)} <span style="color:var(--dim)">(${a.paneIx}/${a.tabPanes})</span></td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.title)}</td>
+      <td><span class="chip ${a.status}">${a.status}</span></td>
+      <td>${a.seq}</td>
+      <td>${isTarget ? '<span class="mark">← next press</span>' : ''}${
+            sibIds.has(a.paneId) ? '<span class="sib">same tab as target</span>' : ''}</td></tr>`;
+  }).join('') : `<tr><td colspan="6" style="color:var(--dim)">Nothing is waiting. A press still raises the window.</td></tr>`;
+
+  $('verdict').textContent = !ordered.length
+    ? 'Empty attention set — every candidate renders the same dark “clear” tile.'
+    : sibs.length
+      ? `AMBIGUOUS: the press goes to ${target.workspace} p${target.paneIx}, but ${sibs.length} other attention pane(s) share that tab.`
+      : `Unambiguous: ${target.workspace} is the only attention pane in its tab. #12’s case exactly.`;
+
+  $('plates').innerHTML = [['shrink','shrink to fit'],['clip','clip with …']].map(([m, cap]) => {
+    const save = PLATE_MODE; PLATE_MODE = m;
+    const svg = `<svg viewBox="0 0 72 20" width="96" height="27" style="border-radius:6px 6px 0 0;display:block">
+      <rect width="72" height="20" fill="#101216"/>${bar(C.blocked)}</svg>`;
+    PLATE_MODE = save;
+    return `<figure class="plate">${svg}<figcaption>${cap}</figcaption></figure>`;
+  }).join('') + (() => {
+    const save = SESSION; SESSION = 'herdr';
+    const svg = `<svg viewBox="0 0 72 20" width="96" height="27" style="border-radius:6px 6px 0 0;display:block">
+      <rect width="72" height="20" fill="#101216"/>${bar(C.blocked)}</svg>`;
+    SESSION = save;
+    return `<figure class="plate">${svg}<figcaption>fallback to <code>herdr</code></figcaption></figure>`;
+  })();
+
+  $('agents').innerHTML = agents.map(a =>
+    `<div class="arow"><div class="name" title="${esc(a.title)}">${esc(a.workspace)} p${a.paneIx}</div>
+      <div class="segs">${STATUSES.map(s => `<button data-p="${a.paneId}" data-s="${s}"
+        class="${a.status === s ? 'on' : ''}">${s}</button>`).join('')}</div></div>`).join('');
+
+  $('fixpick').innerHTML = Object.entries(FIXTURES).map(([k, f]) =>
+    `<button data-fix="${k}" class="${k === fixKey ? 'on' : ''}">${esc(f.name)}</button>`).join('');
+  $('fixdesc').textContent = FIXTURES[fixKey].desc;
+
+  $('log').innerHTML = log.map(l => `<div>${esc(l)}</div>`).join('');
+  renderWalkthrough();
+}
+
+function loadFixture(k, want = {}) {
+  fixKey = k;
+  agents = FIXTURES[k].agents.map(a => ({ ...a }));
+  visited = new Set(); seqTick = 100;
+  agents = agents.map(a => want[a.paneId] ? { ...a, status: want[a.paneId] } : a);
+}
+
+$('agents').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  setStatus(b.dataset.p, b.dataset.s);
+});
+$('fixpick').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  loadFixture(b.dataset.fix);
+  log = [`Fixture “${FIXTURES[fixKey].name}” loaded.`];
+  render();
+});
+$('press').onclick = () => {
+  const r = press(agents, visited);
+  agents = r.agents; visited = r.visited;
+  say(...r.events.slice().reverse());
+};
+$('reset').onclick = () => { visited = new Set(); say('Visited set cleared by hand.'); };
+$('disappear').onclick = () => { visited = new Set(); say('willDisappear — visited set discarded (#7).'); };
+$('sibpip').onchange = e => { sibPip = e.target.checked; render(); };
+$('sessname').oninput = () => render();
+document.querySelectorAll('[data-sess]').forEach(b =>
+  b.onclick = () => { $('sessname').value = b.dataset.sess; render(); });
+
+/* ─────────────────────────────────────────────────────── walkthroughs ──── */
+const WALKS = [
+  { id:'twoblocked', name:'Two blocked in one tab', fix:'split',
+    desc:'nix ① and nix ② are both blocked. Two presses, both landing in the same tab, '
+       + 'each moving the cursor to a different pane.',
+    watch:'Candidate A renders “nix” for press 1 and “nix” for press 2 — identical, while the '
+        + 'button quietly moves. That is exactly the inert face #12 rejected, reappearing one '
+        + 'level down. B and C change; D changes only because one agent happens to be named.',
+    setup: { 'w0:p1':'blocked', 'w0:p2':'blocked' },
+    steps: [['Press ▶','press'],['Press ▶','press'],['Press ▶ (moves on)','press']] },
+
+  { id:'consumed', name:'The sibling the press eats', fix:'split',
+    desc:'nix ① blocked, nix ② done. One press focuses ①, and herdr clears `seen` for the '
+       + 'whole tab — so ② is consumed without ever being named.',
+    watch:'②’s completion disappears from the set on a press that was never aimed at it. '
+        + 'This is #15’s accepted cost. The question here is whether the face owes the user '
+        + 'any warning before it happens — the sibling pip is the only slot that could carry one.',
+    setup: { 'w0:p1':'blocked', 'w0:p2':'done' },
+    steps: [['Press ▶','press']] },
+
+  { id:'fresh', name:'Two fresh agents', fix:'fresh',
+    desc:'Both panes report the generic title `Claude Code`. Candidate D falls back to the '
+       + 'workspace label and becomes candidate A.',
+    watch:'D is ambiguous here and honest everywhere else, which is the worst shape for a '
+        + 'glanceable tile: it works until the moment you spawn a helper, which is the moment '
+        + 'you needed it. Position is the only field that never degrades.',
+    setup: { 'w0:p1':'blocked', 'w0:p2':'blocked' },
+    steps: [['Press ▶','press'],['Press ▶','press']] },
+
+  { id:'three', name:'Three-way split', fix:'three',
+    desc:'Three agents, one tab. Press through all three.',
+    watch:'C has no left/right answer for the middle pane and falls back to a third glyph — '
+        + 'a positional hint stops being positional. B just counts, and keeps counting.',
+    setup: { 'w0:p1':'blocked', 'w0:p2':'blocked', 'w0:p5':'blocked' },
+    steps: [['Press ▶','press'],['Press ▶','press'],['Press ▶','press']] },
+
+  { id:'nosplit', name:'The common case must not regress', fix:'solo',
+    desc:'#12’s fixture, unchanged: one agent per tab, five of them blocked. Press through.',
+    watch:'Every candidate should render exactly what #12 shipped — a bare workspace label, '
+        + 'no index, no glyph. A disambiguator that shows up here is pure cost. Check B and C '
+        + 'stay quiet, and note D is *different from #12* on every press.',
+    setup: { 'wX:p1':'blocked', 'wZ:p1':'blocked', 'w0:p1':'blocked', 'w11:p4':'blocked', 'w13:p1':'blocked' },
+    steps: [['Press ▶','press'],['Press ▶','press'],['Press ▶','press'],['Press ▶','press']] },
+];
+
+let walk = WALKS[0], walkStep = 0;
+
+function startWalk(w) {
+  walk = w; walkStep = 0;
+  loadFixture(w.fix, w.setup);
+  log = [`Walkthrough “${w.name}” — reset to a known start.`];
+  render();
+}
+
+function renderWalkthrough() {
+  $('wtabs').innerHTML = WALKS.map(w =>
+    `<button data-w="${w.id}" class="${w === walk ? 'on' : ''}">${esc(w.name)}</button>`).join('');
+  $('wdesc').textContent = walk.desc;
+  $('wsteps').innerHTML = walk.steps.map(([label], i) =>
+    `<div class="step"><div class="n">${i + 1}</div>
+      <div><button data-step="${i}" class="${i < walkStep ? 'done' : ''}"
+        ${i === walkStep ? '' : 'disabled'}>${esc(label)}</button></div></div>`).join('');
+  $('wwatch').textContent = 'Watch for: ' + walk.watch;
+}
+
+$('wtabs').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  startWalk(WALKS.find(w => w.id === b.dataset.w));
+});
+$('wsteps').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.disabled) return;
+  const [, action] = walk.steps[+b.dataset.step];
+  walkStep++;
+  if (action === 'press') $('press').click();
+  else { const [p, s] = action.split('='); setStatus(p, s); }
+});
+
+startWalk(WALKS[0]);
+</script>
