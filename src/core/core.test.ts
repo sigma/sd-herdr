@@ -340,6 +340,98 @@ describe("backoff", () => {
   });
 });
 
+describe("a press", () => {
+  const PRESS: CoreEvent = { type: "pressed", at: 2500 };
+  /** What one press asks for, from a session showing `name`. */
+  const press = (name: Parameters<typeof fixture>[0], sessionName = "default") =>
+    drive([APPEAR, snapshotAt(2000, name), PRESS], initial(sessionName, SOCK));
+
+  it("writes the nonce, focuses, raises, then clears — in that order", () => {
+    // The order is the contract, not a preference: the TUI marks the active tab
+    // seen on terminal focus-in, so raising before focusing would consume a
+    // done agent in the old tab the user never saw.
+    expect(press("blocked-one").last.map((e) => e.type)).toEqual([
+      "setTitle",
+      "focusPane",
+      "raise",
+      "clearTitle",
+    ]);
+  });
+
+  it("focuses the top-priority agent, not the first one herdr listed", () => {
+    expect(press("mixed-tiers").last).toContainEqual({
+      type: "focusPane",
+      socketPath: SOCK,
+      paneId: "w3:p1",
+    });
+  });
+
+  it("raises under the same nonce it wrote, so the raise can find the window", () => {
+    const [set, , raise] = press("blocked-one").last;
+    expect(set).toEqual({ type: "setTitle", socketPath: SOCK, nonce: expect.any(String) });
+    expect(raise).toEqual({ type: "raise", nonce: (set as { nonce: string }).nonce });
+  });
+
+  it("uses a nonce a human can live with finding stranded in a title bar", () => {
+    // A client dying mid-press strands it permanently — `clear` then answers
+    // no_foreground_client — so the user has to recognise it and clear it by hand.
+    const { last } = press("blocked-one", "work");
+    const nonce = (last[0] as { nonce: string }).nonce;
+    expect(nonce).toBe("sd-herdr raise work #1");
+  });
+
+  it("counts presses, so two in flight do not answer to the same title", () => {
+    const { effects } = drive([APPEAR, snapshotAt(2000, "blocked-one"), PRESS, PRESS]);
+    const nonces = effects.filter((e) => e.type === "raise").map((e) => e.nonce);
+    expect(nonces).toEqual(["sd-herdr raise default #1", "sd-herdr raise default #2"]);
+  });
+
+  it("raises and focuses nothing when nothing is waiting", () => {
+    // The raise still happens: the user asked to be taken to the session.
+    expect(press("no-agents").last.map((e) => e.type)).toEqual(["setTitle", "raise", "clearTitle"]);
+  });
+
+  it("raises and focuses nothing while grey, never acting on data it distrusts", () => {
+    const blind = drive([APPEAR, { type: "pressed", at: 2000 }]).last;
+    expect(blind.map((e) => e.type)).toEqual(["setTitle", "raise", "clearTitle"]);
+
+    const stale = drive([APPEAR, snapshotAt(2000, "blocked-one"), { type: "pressed", at: 6000 }]);
+    expect(stale.last.map((e) => e.type)).toEqual(["setTitle", "raise", "clearTitle"]);
+  });
+
+  it("will not speak for an unknown agent, which is what its grey says", () => {
+    expect(press("unknown-only").last.map((e) => e.type)).toEqual([
+      "setTitle",
+      "raise",
+      "clearTitle",
+    ]);
+  });
+
+  it("re-reads the session after every focus, because one press can consume several", () => {
+    // Focusing any pane clears herdr's `seen` for every pane in that tab, so
+    // the post-press attention set is not something the core can predict.
+    const { last } = drive([
+      APPEAR,
+      snapshotAt(2000, "blocked-one"),
+      PRESS,
+      { type: "focusResult", at: 2600, ok: true },
+    ]);
+    expect(last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+  });
+
+  it("re-snapshots and stops when the pane died between the poll and the press", () => {
+    // pane_not_found: no in-press retry, no second focus. The raise already
+    // went out with the rest of the press, so the window still comes forward.
+    const { last } = drive([
+      APPEAR,
+      snapshotAt(2000, "blocked-one"),
+      PRESS,
+      { type: "focusResult", at: 2600, ok: false },
+    ]);
+    expect(last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+  });
+});
+
 describe("the heartbeat", () => {
   it("keeps beating while the button is on screen", () => {
     expect(drive([APPEAR, tickAt(1500)]).last).toEqual([{ type: "tickAfter", ms: 500 }]);

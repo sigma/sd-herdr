@@ -1,6 +1,7 @@
 import streamDeck, {
   action,
   type KeyAction,
+  type KeyDownEvent,
   SingletonAction,
   type WillAppearEvent,
   type WillDisappearEvent,
@@ -9,8 +10,9 @@ import streamDeck, {
 import { Runner } from "../core/runner.js";
 import type { FaceDescriptor } from "../face/descriptor.js";
 import { renderFaceSvg, svgToImageUri } from "../face/render.js";
-import { snapshot } from "../herdr/client.js";
+import { clearWindowTitle, focusPane, setWindowTitle, snapshot } from "../herdr/client.js";
 import { socketPathFor } from "../herdr/session.js";
+import { raise } from "../raise/spawn.js";
 
 /**
  * The session this button speaks for. A constant until #27, which makes it a
@@ -36,6 +38,11 @@ export class AttentionAction extends SingletonAction {
     this.runnerFor(ev.action).appeared();
   }
 
+  override onKeyDown(ev: KeyDownEvent): void {
+    if (!ev.action.isKey()) return;
+    this.runnerFor(ev.action).pressed();
+  }
+
   override onWillDisappear(ev: WillDisappearEvent): void {
     const runner = this.runners.get(ev.action.id);
     if (runner === undefined) return;
@@ -51,8 +58,21 @@ export class AttentionAction extends SingletonAction {
 
     const runner = new Runner(SESSION_NAME, socketPathFor(SESSION_NAME), {
       snapshot,
+      // The reason is logged rather than branched on: `no_foreground_client`
+      // means there is no attached terminal, and the raise then finds no window
+      // carrying the nonce and declines — the same outcome, one path.
+      setTitle: async (socketPath, nonce) => {
+        const reason = await setWindowTitle(socketPath, nonce);
+        if (reason !== "set") streamDeck.logger.debug(`window title not set: ${reason}`);
+      },
+      clearTitle: async (socketPath) => {
+        await clearWindowTitle(socketPath);
+      },
+      focusPane,
+      raise,
       paint: (descriptor) => paint(key, descriptor),
       now: () => Date.now(),
+      report: (message) => streamDeck.logger.warn(message),
       schedule: (ms, fn) => {
         const handle = setTimeout(fn, ms);
         return { cancel: () => clearTimeout(handle) };

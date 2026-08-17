@@ -7,12 +7,33 @@ you to the most urgent one.
 The design is specified in [#17](https://github.com/sigma/sd-herdr/issues/17); the
 vocabulary it is argued in is [`CONTEXT.md`](CONTEXT.md).
 
-**Status: tracer bullet.** The tile watches the `default` herdr session and turns red
-while any agent in it is blocked, amber when only `done` agents are waiting, and dark when
-nothing is. It cannot yet be pressed and does not name where a press would go. Grey is
-only half-implemented: it covers "no snapshot yet" and an `unknown`-only attention set,
-but not the staleness deadline or the settling window — so a face currently outlives the
-session it describes rather than aging out of it.
+**Status: it watches, and it can be pressed.** The tile follows the `default` herdr
+session — red while any agent is blocked, amber when only `done` agents are waiting, dark
+when nothing is, and **grey whenever it cannot see the session**: an unreachable socket, a
+stopped session, a snapshot older than 3 s, or an attention set of nothing but `unknown`.
+Grey is one state with one plate (`herdr`) however it was reached, and it is never
+all-clear. Failures back off to a 5 s ceiling and recover on their own.
+
+A press takes you to the longest-waiting agent: it focuses that pane — workspace, tab and
+pane in one call, so the agent is immediately typeable — and raises the host terminal
+window through AeroSpace. There is **no cycle yet**: every press goes to the top of the
+priority order, so a second `blocked` agent is not yet reachable by button (that is
+[#23](https://github.com/sigma/sd-herdr/issues/23)). Pressing while grey raises the window
+and focuses nothing, deliberately: the tile has already said it does not trust its data.
+
+Two accepted consequences worth knowing about now:
+
+- **A second `done` agent in the same tab is unreachable by button.** Focusing any pane
+  clears herdr's `seen` for *every* pane in that tab, so one press consumes them all. The
+  face gives no warning, because there is nothing the user could do differently.
+- **A dying client can strand the nonce.** The press writes a marker into herdr's
+  `client_window_title` so the raise can find the right window, and clears it immediately
+  after. If the client dies in between, `clear` answers `no_foreground_client` and the
+  marker stays in the title bar — which is why it reads `sd-herdr raise <session> #<n>`
+  rather than a hex blob. Clear it by restarting the herdr client.
+
+Still missing: the settling window after a herdr restart, the press cycle, and the body
+line naming where the next press goes.
 
 ## Development
 
@@ -44,6 +65,7 @@ logs` tails the plugin log.
 src/core/        the seam: reduce(state, event) -> {state, effects} and face(state)
 src/face/        the FaceDescriptor and its SVG renderer (pure, unit-tested)
 src/herdr/       the NDJSON socket client, and where a session's socket lives
+src/raise/       rung 1 of the raise ladder: AeroSpace, probed by absolute path
 src/actions/     the Stream Deck action — the only SDK-coupled code
 src/testing/     test-only access to the fixture corpus
 src/plugin.ts    the entry point
@@ -87,5 +109,12 @@ Verified on Stream Deck app 7.4.2 / macOS 26.5.2:
 - First paint after a plugin restart: grey at `20:16:54.641`, dark at `20:16:54.749` —
   **108 ms** to a face backed by real data, since there is nothing to resolve first.
 
+- The AeroSpace rung's listing format is what the parser expects:
+  `aerospace list-windows --monitor all --format '%{window-id} %{window-title}'` prints one
+  `<id> <title>` line per window, ids carry no spaces, and an untitled window still emits
+  its trailing separator. Checked against AeroSpace 0.21.3-Beta over 13 live windows.
+
 **Not yet done by hand:** placing the key on the device and confirming the painted face
-with human eyes. That is a physical step, not scriptable; do it after `just link`.
+with human eyes; and one real press end to end — writing the nonce, focusing a pane and
+raising its window — which mutates a live herdr session, so it wants a scratch session
+rather than the one you are working in.

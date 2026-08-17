@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { decodeResponse, decodeSnapshot, HerdrError } from "./client.js";
+import { decodeResponse, decodeSnapshot, decodeTitleReason, HerdrError } from "./client.js";
 
 /**
  * The socket itself is edge and is verified by hand against a live herdr. What
@@ -63,5 +63,48 @@ describe("decodeSnapshot", () => {
     expect(() => decodeSnapshot('{"id":"s","result":{"type":"session_snapshot"}}')).toThrow(
       /no snapshot/,
     );
+  });
+});
+
+describe("decodeTitleReason", () => {
+  it("reads back the reason herdr gives, not just the absence of an error", () => {
+    expect(
+      decodeTitleReason(
+        '{"id":"t","result":{"type":"client_window_title","changed":true,"reason":"set"}}',
+      ),
+    ).toBe("set");
+  });
+
+  it("surfaces no_foreground_client, which is a successful response that did nothing", () => {
+    // herdr is telling us there is no attached terminal to raise. It is not an
+    // error, and it is the one free liveness signal in the press.
+    expect(
+      decodeTitleReason(
+        '{"id":"t","result":{"type":"client_window_title","changed":false,"reason":"no_foreground_client"}}',
+      ),
+    ).toBe("no_foreground_client");
+  });
+
+  it("refuses to guess when the reason is missing or unrecognised", () => {
+    // Reading a reason it does not know as no_foreground_client would report
+    // "no terminal is attached" about a call that may well have worked.
+    expect(() =>
+      decodeTitleReason('{"id":"t","result":{"type":"client_window_title","changed":true}}'),
+    ).toThrow(HerdrError);
+    expect(() =>
+      decodeTitleReason(
+        '{"id":"t","result":{"type":"client_window_title","changed":true,"reason":"rewritten"}}',
+      ),
+    ).toThrow(/unknown reason/);
+  });
+
+  it("refuses an empty title at the call site, as herdr does on the wire", () => {
+    // Verified server behaviour: `title: ""` is invalid_params; clearing has
+    // its own method.
+    expect(() =>
+      decodeTitleReason(
+        '{"id":"t","error":{"code":"invalid_params","message":"window title is empty"}}',
+      ),
+    ).toThrow(HerdrError);
   });
 });

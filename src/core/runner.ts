@@ -20,12 +20,22 @@ export interface Timer {
 export interface Adapters {
   /** One snapshot, or a rejection. */
   snapshot(socketPath: string): Promise<Snapshot>;
+  /** Mark the session's host terminal window, so the raise has something to aim at. */
+  setTitle(socketPath: string, nonce: string): Promise<void>;
+  /** Put the terminal's own title back. */
+  clearTitle(socketPath: string): Promise<void>;
+  /** Focus one pane — workspace, tab and pane in a single call. Rejects if it is gone. */
+  focusPane(socketPath: string, paneId: string): Promise<void>;
+  /** Bring the marked window forward, by whichever rung of the ladder answers. */
+  raise(nonce: string): Promise<void>;
   /** Draw a face on the key. */
   paint(descriptor: FaceDescriptor): Promise<void> | void;
   /** The clock — read *here*, never in the core, and stamped onto every event. */
   now(): number;
   /** Schedule a callback. */
   schedule(ms: number, fn: () => void): Timer;
+  /** Say that something went wrong. The tile is an image on a key; this is the record. */
+  report(message: string): void;
 }
 
 /**
@@ -45,6 +55,13 @@ export class Runner {
    */
   private beat: Timer | null = null;
   private painted: string | null = null;
+  /**
+   * Effects waiting their turn. The press is four adapter calls whose *order*
+   * is the contract — nonce, focus, raise, clear — so effects are performed one
+   * at a time rather than fired off together.
+   */
+  private queue: Effect[] = [];
+  private draining = false;
 
   constructor(
     sessionName: string,
@@ -71,11 +88,34 @@ export class Runner {
     this.dispatch({ type: "disappeared", at: this.adapters.now() });
   }
 
+  /** The user pressed the key. */
+  pressed(): void {
+    this.dispatch({ type: "pressed", at: this.adapters.now() });
+  }
+
   private dispatch(event: CoreEvent): void {
     const step = reduce(this.state, event);
     this.state = step.state;
     this.repaint();
-    for (const effect of step.effects) this.perform(effect);
+    this.queue.push(...step.effects);
+    void this.drain();
+  }
+
+  /**
+   * Perform the queued effects in order, waiting for each to finish before
+   * starting the next. Re-entrant by design: an adapter's result is dispatched
+   * straight back in, and the effects that come of it join the same queue.
+   */
+  private async drain(): Promise<void> {
+    if (this.draining) return;
+    this.draining = true;
+    try {
+      for (let effect = this.queue.shift(); effect !== undefined; effect = this.queue.shift()) {
+        await this.perform(effect);
+      }
+    } finally {
+      this.draining = false;
+    }
   }
 
   /** Draw only when the face actually changed — a poll a second is not a redraw a second. */
@@ -92,9 +132,13 @@ export class Runner {
     this.pending = null;
   }
 
-  private perform(effect: Effect): void {
+  private async perform(effect: Effect): Promise<void> {
     switch (effect.type) {
       case "snapshot":
+        // The one effect nothing waits for. A snapshot that never comes back
+        // must not take the heartbeat down with it — the staleness deadline
+        // exists precisely to notice that case, and it can only notice while
+        // ticks are still being scheduled behind it.
         void this.adapters
           .snapshot(effect.socketPath)
           .then((snapshot) =>
@@ -118,6 +162,45 @@ export class Runner {
           this.dispatch({ type: "tick", at: this.adapters.now() });
         });
         return;
+
+      case "setTitle":
+        await this.attempt("setTitle", () =>
+          this.adapters.setTitle(effect.socketPath, effect.nonce),
+        );
+        return;
+
+      case "focusPane":
+        // Every way this can fail takes the same shape as `pane_not_found`:
+        // the snapshot the press was aimed with is stale. The core is told so
+        // and re-reads it; nothing here retries.
+        await this.adapters
+          .focusPane(effect.socketPath, effect.paneId)
+          .then(() => this.dispatch({ type: "focusResult", at: this.adapters.now(), ok: true }))
+          .catch(() => this.dispatch({ type: "focusResult", at: this.adapters.now(), ok: false }));
+        return;
+
+      case "raise":
+        await this.attempt("raise", () => this.adapters.raise(effect.nonce));
+        return;
+
+      case "clearTitle":
+        await this.attempt("clearTitle", () => this.adapters.clearTitle(effect.socketPath));
+        return;
+    }
+  }
+
+  /**
+   * Run one adapter and swallow whatever it throws.
+   *
+   * The press is a sequence whose *tail* matters most: a nonce left behind is
+   * the one failure a human has to clean up by hand, in their title bar. So no
+   * step of it is allowed to abort the steps after it.
+   */
+  private async attempt(what: string, fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (err) {
+      this.adapters.report(`${what} failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 }

@@ -77,13 +77,29 @@ export type CoreEvent =
   | { readonly type: "snapshotTaken"; readonly at: number; readonly snapshot: Snapshot }
   | { readonly type: "snapshotFailed"; readonly at: number }
   | { readonly type: "pollDue"; readonly at: number }
-  | { readonly type: "tick"; readonly at: number };
+  | { readonly type: "tick"; readonly at: number }
+  | { readonly type: "pressed"; readonly at: number }
+  /**
+   * How the focus half of a press went. `ok: false` is `pane_not_found` and
+   * every other way a focus can fail: they are indistinguishable on the wire —
+   * herdr answers `pane_not_found` for a dead id, a malformed one and one that
+   * never existed — so the core does not pretend to tell them apart.
+   *
+   * Both outcomes provoke the same effect today, and the flag is still carried
+   * rather than dropped: the visited set (#23) records where a press *took* the
+   * user, and a focus that never landed took them nowhere.
+   */
+  | { readonly type: "focusResult"; readonly at: number; readonly ok: boolean };
 
 /** What the core asks the world for. Data — the adapters decide how. */
 export type Effect =
   | { readonly type: "snapshot"; readonly socketPath: string }
   | { readonly type: "pollAfter"; readonly ms: number }
-  | { readonly type: "tickAfter"; readonly ms: number };
+  | { readonly type: "tickAfter"; readonly ms: number }
+  | { readonly type: "setTitle"; readonly socketPath: string; readonly nonce: string }
+  | { readonly type: "focusPane"; readonly socketPath: string; readonly paneId: string }
+  | { readonly type: "raise"; readonly nonce: string }
+  | { readonly type: "clearTitle"; readonly socketPath: string };
 
 /**
  * The core's state. Deliberately not part of the tested contract: tests drive
@@ -107,6 +123,8 @@ export interface CoreState {
   readonly snapshotAt: number;
   /** How many polls in a row have failed. Drives the backoff, and nothing else. */
   readonly failures: number;
+  /** How many presses this button has served. Only the nonce reads it. */
+  readonly presses: number;
   /** When the last event happened. The core's only notion of time. */
   readonly at: number;
 }
@@ -120,6 +138,7 @@ export function initial(sessionName: string, socketPath: string): CoreState {
     snapshot: null,
     snapshotAt: 0,
     failures: 0,
+    presses: 0,
     at: 0,
   };
 }
@@ -195,6 +214,40 @@ export function reduce(
       return { state: next, effects: probe(next) };
     }
 
+    case "pressed": {
+      // The whole press, emitted at once and in order. The adapters obey one
+      // effect at a time, so "focus, then raise" is a property of this list
+      // rather than of anything the runner decides.
+      //
+      // The nonce goes out even when there is nothing to focus: the user asked
+      // to be taken to the session, and an exact raise still needs a marked
+      // window to aim at.
+      const next = { ...state, presses: state.presses + 1, at };
+      const nonce = nonceFor(next);
+      const target = pressTarget(next);
+      return {
+        state: next,
+        effects: [
+          { type: "setTitle", socketPath: next.socketPath, nonce },
+          ...(target === null
+            ? []
+            : ([{ type: "focusPane", socketPath: next.socketPath, paneId: target }] as const)),
+          { type: "raise", nonce },
+          { type: "clearTitle", socketPath: next.socketPath },
+        ],
+      };
+    }
+
+    case "focusResult": {
+      // Both outcomes re-read the session, and neither retries. A focus that
+      // landed may have consumed several `done` agents at once — focusing any
+      // pane clears herdr's `seen` for every pane in that tab — and a focus
+      // that failed means the snapshot the press was aimed with is already
+      // wrong. Either way the only honest next move is to look again.
+      const next = { ...state, at };
+      return { state: next, effects: probe(next) };
+    }
+
     case "tick": {
       // The heartbeat asks herdr for nothing. It only carries the time in, so
       // that a deadline can pass while the poll loop is wedged and silent.
@@ -202,6 +255,42 @@ export function reduce(
       return { state: next, effects: scheduleTick(next) };
     }
   }
+}
+
+/**
+ * The pane this press should focus, or `null` for "focus nothing and just
+ * raise".
+ *
+ * Null in exactly two cases, and they are the same case seen twice: there is
+ * nothing waiting, or the face is grey. A grey tile is the plugin saying it
+ * does not trust what it knows, and acting on distrusted data would make that
+ * statement a lie — it would also be the one way the button could take the user
+ * somewhere they did not ask to go.
+ */
+function pressTarget(state: CoreState): string | null {
+  if (state.snapshot === null || stateColour(state) === "grey") return null;
+  return attentionSet(state.snapshot.agents)[0]?.paneId ?? null;
+}
+
+/**
+ * The marker written into herdr's `client_window_title` so the raise can find
+ * the host terminal's window among every window on the machine.
+ *
+ * Human-legible on purpose: a client that dies mid-press strands it in the
+ * title bar permanently, because `clear` then answers `no_foreground_client`,
+ * and the user is the only one left who can remove it. So it names the tool
+ * that wrote it and the session it was raising.
+ *
+ * The counter distinguishes *successive* presses — a title left over from an
+ * earlier one is visibly not this one — and, being a count rather than a random
+ * blob, it is something a test can assert. It does **not** make the nonce
+ * unique across buttons: two tiles watching one session share herdr's single
+ * `client_window_title`, so simultaneous presses collide there whatever this
+ * says. Two tiles watching *different* sessions never collide, because the
+ * session name is in the string.
+ */
+function nonceFor(state: CoreState): string {
+  return `sd-herdr raise ${state.sessionName} #${state.presses}`;
 }
 
 /**

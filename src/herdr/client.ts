@@ -71,6 +71,32 @@ export function decodeSnapshot(line: string): Snapshot {
   return snapshot as Snapshot;
 }
 
+/**
+ * What herdr did with a window title. `no_foreground_client` is the one that
+ * matters: a normal, successful response saying the call did nothing, because
+ * no terminal is attached to the session. Branch on the reason, never on the
+ * absence of an error.
+ */
+export type TitleReason = "set" | "cleared" | "no_foreground_client";
+
+const TITLE_REASONS: readonly string[] = ["set", "cleared", "no_foreground_client"];
+
+/**
+ * Narrow a `client.window_title.*` result to what it did.
+ *
+ * A reason herdr did not send, or one this build does not know, is a decoding
+ * failure rather than a value: reading it as `no_foreground_client` would
+ * report "there is no terminal attached" about a call that may well have
+ * worked, which is the one thing this response exists to tell the caller.
+ */
+export function decodeTitleReason(line: string): TitleReason {
+  const { reason } = decodeResponse(line) as { reason?: unknown };
+  if (typeof reason !== "string" || !TITLE_REASONS.includes(reason)) {
+    throw new HerdrError("invalid_response", `herdr answered with an unknown reason: ${reason}`);
+  }
+  return reason as TitleReason;
+}
+
 let requestCounter = 0;
 
 /**
@@ -122,4 +148,36 @@ function request(socketPath: string, method: string, params: object = {}): Promi
 /** Take one snapshot of the session behind a socket. */
 export async function snapshot(socketPath: string): Promise<Snapshot> {
   return decodeSnapshot(await request(socketPath, "session.snapshot"));
+}
+
+/**
+ * Mark the session's host terminal window with a title, so that a window
+ * manager can be asked to raise *that* window rather than the application.
+ *
+ * herdr never re-asserts a title over a set nonce — verified across pane
+ * split and focus, cwd change, status change, tab and workspace create and
+ * focus, and 20 s of idle — so set → raise → clear has no title race.
+ */
+export async function setWindowTitle(socketPath: string, title: string): Promise<TitleReason> {
+  return decodeTitleReason(await request(socketPath, "client.window_title.set", { title }));
+}
+
+/**
+ * Put the terminal's own title back. There is no "set it to empty": herdr
+ * rejects an empty title, and this is the method that undoes a set.
+ */
+export async function clearWindowTitle(socketPath: string): Promise<TitleReason> {
+  return decodeTitleReason(await request(socketPath, "client.window_title.clear"));
+}
+
+/**
+ * Focus one pane — which switches herdr's workspace, tab and pane in a single
+ * call, so there is nothing to chain.
+ *
+ * Rejects with `pane_not_found` when the pane died between the snapshot and the
+ * press; herdr answers the same way for a malformed id and one that never
+ * existed, and the caller's reaction is the same in all three cases.
+ */
+export async function focusPane(socketPath: string, paneId: string): Promise<void> {
+  decodeResponse(await request(socketPath, "pane.focus", { pane_id: paneId }));
 }
