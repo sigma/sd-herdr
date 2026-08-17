@@ -49,8 +49,10 @@ The total order over the attention set: tier `blocked` → `done` → `unknown`,
 lowest `state_change_seq` first within a tier, so the longest-waiting agent wins.
 
 **Top-priority agent**:
-The head of the attention set under priority order, ignoring the visited set. Stable,
-and what the tile's body names today.
+The head of the attention set under priority order, ignoring the visited set. Stable —
+and *not* what the tile names ([#12](https://github.com/sigma/sd-herdr/issues/12)). It
+survives only as the thing the state colour speaks for: focusing a `blocked` agent
+consumes nothing, so this one can sit at the head untouched for a whole cycle.
 
 **Tier**:
 One rank of the priority order. The `blocked` and `done` tiers differ mechanically, not
@@ -83,8 +85,10 @@ returns to the top of the priority order.
 **Next press target**:
 The top-ranked non-exhausted tab — where the button will actually take the user. Equal
 to the top-priority agent's tab at the start of a cycle, and divergent from it
-thereafter. The two are distinct concepts precisely because that divergence is visible
-to the user ([#12](https://github.com/sigma/sd-herdr/issues/12)).
+thereafter. **This is what the tile's body names**
+([#12](https://github.com/sigma/sd-herdr/issues/12)): the body follows the button, the
+state colour keeps urgency. Naming the top-priority agent instead leaves the tile inert
+for an entire cycle of `blocked` agents, since none of them are consumed by being shown.
 
 ## The raise
 
@@ -120,8 +124,11 @@ all — and the only one the plugin can take without an Automation grant of its 
 **Face**:
 What the tile renders for the current attention set: a state colour (red = any
 `blocked`, amber = `done` only, dark = clear, grey = cannot see the session), a session
-nameplate, the named agent's workspace label, and tier-coloured dots for the other
-waiters.
+nameplate, the *next press target*'s workspace label, and tier-coloured dots for the
+other waiters. The three speak different axes and are allowed to disagree — colour is
+the whole session, the label is where the next press goes, the dots are everyone else
+still waiting. In particular a red bar over an amber-tier label is correct, not a bug
+([#12](https://github.com/sigma/sd-herdr/issues/12)).
 
 **Grey**:
 The single "cannot see anything" state — unreachable socket, stopped session, stale
