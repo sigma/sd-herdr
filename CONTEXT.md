@@ -55,7 +55,7 @@ and what the tile's body names today.
 **Tier**:
 One rank of the priority order. The `blocked` and `done` tiers differ mechanically, not
 just in urgency: focusing a `done` agent consumes it, focusing a `blocked` agent
-changes nothing.
+changes nothing. Ranks of the *raise ladder* are **rungs**, never tiers.
 
 ## The cycle
 
@@ -85,6 +85,35 @@ The top-ranked non-exhausted tab — where the button will actually take the use
 to the top-priority agent's tab at the start of a cycle, and divergent from it
 thereafter. The two are distinct concepts precisely because that divergence is visible
 to the user ([#12](https://github.com/sigma/sd-herdr/issues/12)).
+
+## The raise
+
+**Raise**:
+The second half of a press: bringing the terminal window that hosts the herdr client to
+the front, on the workspace the user is actually looking at. Distinct from the *focus*
+that precedes it — focus moves herdr's own cursor, the raise moves macOS's.
+
+**Raise ladder**:
+The ordered mechanisms tried until one of them raises, each a **rung**: the
+window-manager adapter, the AppleScript adapter table, app activation, then declining.
+Ordered window-manager-first because that rung needs no Automation grant, not because it
+is more accurate.
+_Avoid_: tier (that is a rank of the priority order, an unrelated axis), fallback chain.
+
+**Exact raise**:
+A raise that targets the one window carrying the nonce. The first two rungs are exact;
+app activation is not — it raises *an* application window, which under a tiling window
+manager is the one already on screen, and so is wrong rather than merely imprecise.
+
+**Decline**:
+Refusing to raise at all, rather than reaching for a rung known to be wrong here. Not a
+failure: the press's focus has already happened, so the session did move — only the
+window did not follow.
+
+**Window-manager adapter**:
+The rung that asks the user's tiling window manager to raise a window by id. Generic and
+app-agnostic — the only path that reaches a terminal that answers no window queries at
+all — and the only one the plugin can take without an Automation grant of its own.
 
 ## The face
 
