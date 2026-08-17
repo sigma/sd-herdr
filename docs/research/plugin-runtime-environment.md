@@ -212,9 +212,20 @@ Nothing in #17 was contradicted. One thing was missing:
    fails with **`ENOENT`**. [M]
 
    So **`herdr session list` (#17 line 107, and the resolve step in #20) cannot be
-   invoked by bare name.** It needs the same treatment as AeroSpace: an absolute-path
-   probe at startup, cached — with `sh -lc 'command -v herdr'` available as a second
-   rung, since §2 shows a login shell runs fine and finds it.
+   invoked by bare name.** Either it gets the same treatment as AeroSpace — an
+   absolute-path probe at startup, cached, with `sh -lc 'command -v herdr'` as a
+   fallback, since §2 shows a login shell runs fine and finds it — or the plugin stops
+   needing the binary.
+
+   **#20 took the second option.** A session's socket is a path convention herdr derives
+   from the session name (`<configDir>/herdr.sock`, or
+   `<configDir>/sessions/<name>/herdr.sock`), so the plugin computes it instead of
+   asking, and lets the connection itself answer whether the session is running. That
+   removes the discovery mechanism this finding would otherwise have required, and with
+   it a second hazard: the `herdr` CLI enforces a protocol match and already refuses to
+   run against this machine's older server, so a plugin routed through it would have
+   imported a failure the socket does not have. The finding still stands for the
+   AeroSpace rung, which has no equivalent escape.
 
 2. Everything else stands: PATH is not inherited (§1), subprocesses are unrestricted
    (§2), the responsible process is `com.elgato.StreamDeck` (§3), the bundled Node

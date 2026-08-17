@@ -1,32 +1,76 @@
-import { action, type KeyAction, SingletonAction, type WillAppearEvent } from "@elgato/streamdeck";
+import streamDeck, {
+  action,
+  type KeyAction,
+  SingletonAction,
+  type WillAppearEvent,
+  type WillDisappearEvent,
+} from "@elgato/streamdeck";
 
+import { Runner } from "../core/runner.js";
 import type { FaceDescriptor } from "../face/descriptor.js";
 import { renderFaceSvg, svgToImageUri } from "../face/render.js";
+import { snapshot } from "../herdr/client.js";
+import { socketPathFor } from "../herdr/session.js";
 
 /**
- * The one static face the skeleton paints. Hard-coded on purpose: this ticket
- * proves the render path from a descriptor to pixels on the key, before any
- * policy exists to derive a descriptor from a herdr snapshot.
+ * The session this button speaks for. A constant until #27, which makes it a
+ * per-button setting and lets one Stream Deck watch several sessions.
  */
-const STATIC_FACE: FaceDescriptor = {
-  stateColour: "red",
-  nameplate: "herdr",
-  body: "trunk",
-};
+const SESSION_NAME = "default";
 
 /**
- * The attention button. One tile per herdr session — for now, one tile that
- * draws {@link STATIC_FACE} whenever it appears.
+ * The attention button: one tile per herdr session, red while any agent in it
+ * is blocked.
+ *
+ * Everything with an opinion lives behind the core; this class is the Stream
+ * Deck end of the wire. It maps the SDK's lifecycle onto the runner and hands
+ * back a way to paint, and holds one runner per action instance so two buttons
+ * on two devices do not share a poll loop.
  */
 @action({ UUID: "dev.yrh.sd-herdr.attention" })
 export class AttentionAction extends SingletonAction {
-  override onWillAppear(ev: WillAppearEvent): Promise<void> | void {
+  private readonly runners = new Map<string, Runner>();
+
+  override onWillAppear(ev: WillAppearEvent): void {
     if (!ev.action.isKey()) return;
-    return paint(ev.action, STATIC_FACE);
+    this.runnerFor(ev.action).appeared();
+  }
+
+  override onWillDisappear(ev: WillDisappearEvent): void {
+    const runner = this.runners.get(ev.action.id);
+    if (runner === undefined) return;
+    // The button is gone, and so is the reason to poll. The visited set is
+    // cleared on willDisappear too — but that is #23's, once a cycle exists.
+    runner.disappeared();
+    this.runners.delete(ev.action.id);
+  }
+
+  private runnerFor(key: KeyAction): Runner {
+    const existing = this.runners.get(key.id);
+    if (existing !== undefined) return existing;
+
+    const runner = new Runner(SESSION_NAME, socketPathFor(SESSION_NAME), {
+      snapshot,
+      paint: (descriptor) => paint(key, descriptor),
+      now: () => Date.now(),
+      schedule: (ms, fn) => {
+        const handle = setTimeout(fn, ms);
+        return { cancel: () => clearTimeout(handle) };
+      },
+    });
+    this.runners.set(key.id, runner);
+    return runner;
   }
 }
 
-/** Draw a face onto a key. The only place the SDK and the renderer meet. */
+/**
+ * Draw a face onto a key. The only place the SDK and the renderer meet.
+ *
+ * The descriptor is logged because it is otherwise unobservable: the plugin's
+ * entire output is an image on a physical key, and the runner draws only on a
+ * change, so this line is the record of what the tile said and when.
+ */
 function paint(key: KeyAction, face: FaceDescriptor): Promise<void> {
+  streamDeck.logger.debug(`face ${JSON.stringify(face)}`);
   return key.setImage(svgToImageUri(renderFaceSvg(face)));
 }
