@@ -1,0 +1,31 @@
+{
+  "name": "sd-herdr",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Stream Deck attention button for a herdr session",
+  "packageManager": "pnpm@11.17.0",
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "link": "streamdeck link dev.yrh.sd-herdr.sdPlugin",
+    "validate": "streamdeck validate dev.yrh.sd-herdr.sdPlugin"
+  },
+  "dependencies": {
+    "@elgato/streamdeck": "^2.1.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.2",
+    "@elgato/cli": "^1.7.4",
+    "@rollup/plugin-commonjs": "^29.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-typescript": "^12.1.0",
+    "@types/node": "^26.2.0",
+    "rollup": "^4.24.0",
+    "tslib": "^2.7.0",
+    "typescript": "^5.5.0",
+    "vitest": "^3.0.0"
+  }
+}

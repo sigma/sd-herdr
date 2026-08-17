@@ -1,0 +1,4 @@
+# Single package at the repo root — no `packages:` list. This file exists only
+# because pnpm 11 reads settings from here rather than from package.json.
+allowBuilds:
+  esbuild: true

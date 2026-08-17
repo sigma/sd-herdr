@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "Name": "herdr",
+  "Version": "0.1.0.0",
+  "Author": "Yann Hodique",
+  "Description": "Surfaces whether any agent in a herdr session needs attention, and takes you to the most urgent one.",
+  "Category": "herdr",
+  "URL": "https://github.com/sigma/sd-herdr",
+  "Icon": "imgs/plugin/marketplace",
+  "CategoryIcon": "imgs/plugin/category-icon",
+  "CodePath": "bin/plugin.js",
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.5"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "10.15"
+    }
+  ],
+  "Nodejs": {
+    "Version": "20",
+    "Debug": "enabled"
+  },
+  "UUID": "dev.yrh.sd-herdr",
+  "Actions": [
+    {
+      "Name": "Attention",
+      "UUID": "dev.yrh.sd-herdr.attention",
+      "Icon": "imgs/actions/attention",
+      "Tooltip": "Show whether any herdr agent needs attention; press to go to it",
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "imgs/actions/attention",
+          "TitleAlignment": "middle"
+        }
+      ]
+    }
+  ]
+}
