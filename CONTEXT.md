@@ -23,6 +23,14 @@ changed". Focusing a tab clears it for **every** pane in that tab, because a tab
 panes are tiled and visible together.
 _Avoid_: read, acknowledged, dismissed.
 
+**Server lifetime**:
+One run of a herdr server for a session. Topology — workspaces, tabs, panes, focus —
+survives across lifetimes; **agent identity does not**, and herdr never restores it, so
+it returns only when whoever owns the pane re-asserts it. A lifetime ends at a restart
+*or* a live handoff; the two are indistinguishable to a client and need no distinction.
+Its boundary is observable: every pane's `terminal_id` is regenerated while its
+`pane_id` stays put.
+
 **Tab**:
 herdr's unit of visibility — a set of tiled panes, exactly one of which is focused, and
 exactly one tab of one workspace visible at a time. The tab, not the pane, is what a
@@ -88,10 +96,20 @@ waiters.
 
 **Grey**:
 The single "cannot see anything" state — unreachable socket, stopped session, stale
-snapshot past the 3 s deadline. Deliberately *one* state, and never to be rendered as
-"all clear".
+snapshot past the 3 s deadline, an attention set of *only* `unknown` agents, and the
+settling window. Deliberately *one* state, and never to be rendered as "all clear".
+`unknown` is not a colour of its own: "there are agents and I cannot tell what they are
+doing" is the same thing to a user as "I cannot see the session".
 _Avoid_: disconnected, offline, error (these imply a distinction the face does not
 make).
+
+**Settling**:
+The brief grey hold after a *server lifetime* boundary, before the face
+is trusted again. It exists only to avoid flashing a wrong face during the transition —
+*not* to wait for agents to come back, because they may never. Ends on a fixed timer,
+after which a dark face is honest: a herdr that has forgotten its agents genuinely has
+none.
+_Avoid_: reconnecting, recovering (both imply the agents are on their way back).
 
 **Nonce**:
 The human-legible marker the plugin writes into herdr's `client_window_title` to
