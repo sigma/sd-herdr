@@ -1,0 +1,90 @@
+{
+  "provenance": {
+    "kind": "derived",
+    "derivedFrom": "live-session.json",
+    "note": "HAND-DERIVED, not captured. Trimmed to the fields this scenario exercises; see blocked-one.json for a complete-shape derived snapshot. The second entry — `unknown` with NO `agent` field — is a shape the server is not believed to produce: research on the socket API found `agents[]` already filtered to panes that host an agent, with the agentless panes left in `panes[]`. It is here to pin the defensive guard the attention model specifies, so that the guard cannot be deleted as dead code without a test going red.",
+    "shape": "Attention made entirely of `unknown`. Two agents, one of which carries no `agent` field and so is NOT attention."
+  },
+  "snapshot": {
+    "version": "0.8.0",
+    "protocol": 19,
+    "focused_workspace_id": "w0",
+    "focused_tab_id": "w0:t1",
+    "focused_pane_id": "w0:p1",
+    "workspaces": [
+      {
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "nix",
+        "focused": true,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w0:t1",
+        "agent_status": "unknown"
+      },
+      {
+        "workspace_id": "w1",
+        "number": 2,
+        "label": "trunk",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w1:t1",
+        "agent_status": "unknown"
+      }
+    ],
+    "tabs": [
+      {
+        "tab_id": "w0:t1",
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "1",
+        "focused": true,
+        "pane_count": 1,
+        "agent_status": "unknown"
+      },
+      {
+        "tab_id": "w1:t1",
+        "workspace_id": "w1",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "unknown"
+      }
+    ],
+    "panes": [],
+    "layouts": [],
+    "agents": [
+      {
+        "terminal_id": "term_ddd0000000001",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "unknown",
+        "workspace_id": "w0",
+        "tab_id": "w0:t1",
+        "pane_id": "w0:p1",
+        "focused": true,
+        "state_change_seq": 55,
+        "cwd": "/Users/dev/.config/nix",
+        "foreground_cwd": "/Users/dev/.config/nix",
+        "revision": 4
+      },
+      {
+        "terminal_id": "term_ddd0000000002",
+        "terminal_title": "~/s/trunk",
+        "terminal_title_stripped": "~/s/trunk",
+        "agent_status": "unknown",
+        "workspace_id": "w1",
+        "tab_id": "w1:t1",
+        "pane_id": "w1:p1",
+        "focused": false,
+        "state_change_seq": 20,
+        "cwd": "/Users/dev/src/trunk",
+        "foreground_cwd": "/Users/dev/src/trunk",
+        "revision": 60
+      }
+    ]
+  }
+}

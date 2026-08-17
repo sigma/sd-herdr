@@ -1,0 +1,193 @@
+{
+  "provenance": {
+    "kind": "derived",
+    "derivedFrom": "live-session.json",
+    "note": "HAND-DERIVED, not captured. Trimmed to the fields this scenario exercises; see blocked-one.json for a complete-shape derived snapshot.",
+    "shape": "Every tier at once, with the sequence numbers deliberately fighting the tier order: the `done` agent (seq 100) and the `unknown` agent (seq 90) have both waited longer than either `blocked` agent (seq 400, 320), and the array is ordered so that reading it as-is would give the wrong answer. Priority is tier first, sequence only within a tier — so the head is the seq-320 blocked agent, and an `idle` agent that waited longest of all is not in the set at all."
+  },
+  "snapshot": {
+    "version": "0.8.0",
+    "protocol": 19,
+    "focused_workspace_id": "w0",
+    "focused_tab_id": "w0:t1",
+    "focused_pane_id": "w0:p1",
+    "workspaces": [
+      {
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "nix",
+        "focused": true,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w0:t1",
+        "agent_status": "blocked"
+      },
+      {
+        "workspace_id": "w1",
+        "number": 2,
+        "label": "trunk",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w1:t1",
+        "agent_status": "done"
+      },
+      {
+        "workspace_id": "w2",
+        "number": 3,
+        "label": "infra",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w2:t1",
+        "agent_status": "unknown"
+      },
+      {
+        "workspace_id": "w3",
+        "number": 4,
+        "label": "playpen",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w3:t1",
+        "agent_status": "blocked"
+      },
+      {
+        "workspace_id": "w4",
+        "number": 5,
+        "label": "IaC",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w4:t1",
+        "agent_status": "idle"
+      }
+    ],
+    "tabs": [
+      {
+        "tab_id": "w0:t1",
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "1",
+        "focused": true,
+        "pane_count": 1,
+        "agent_status": "blocked"
+      },
+      {
+        "tab_id": "w1:t1",
+        "workspace_id": "w1",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "done"
+      },
+      {
+        "tab_id": "w2:t1",
+        "workspace_id": "w2",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "unknown"
+      },
+      {
+        "tab_id": "w3:t1",
+        "workspace_id": "w3",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "blocked"
+      },
+      {
+        "tab_id": "w4:t1",
+        "workspace_id": "w4",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "idle"
+      }
+    ],
+    "panes": [],
+    "layouts": [],
+    "agents": [
+      {
+        "terminal_id": "term_ccc0000000001",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "unknown",
+        "workspace_id": "w2",
+        "tab_id": "w2:t1",
+        "pane_id": "w2:p1",
+        "focused": false,
+        "state_change_seq": 90,
+        "cwd": "/Users/dev/src/infra",
+        "foreground_cwd": "/Users/dev/src/infra",
+        "revision": 3
+      },
+      {
+        "terminal_id": "term_ccc0000000002",
+        "agent": "codex",
+        "terminal_title": "codex",
+        "terminal_title_stripped": "codex",
+        "agent_status": "done",
+        "workspace_id": "w1",
+        "tab_id": "w1:t1",
+        "pane_id": "w1:p1",
+        "focused": false,
+        "state_change_seq": 100,
+        "cwd": "/Users/dev/src/trunk",
+        "foreground_cwd": "/Users/dev/src/trunk",
+        "revision": 22
+      },
+      {
+        "terminal_id": "term_ccc0000000003",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "blocked",
+        "workspace_id": "w0",
+        "tab_id": "w0:t1",
+        "pane_id": "w0:p1",
+        "focused": true,
+        "state_change_seq": 400,
+        "cwd": "/Users/dev/.config/nix",
+        "foreground_cwd": "/Users/dev/.config/nix",
+        "revision": 31
+      },
+      {
+        "terminal_id": "term_ccc0000000004",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "blocked",
+        "workspace_id": "w3",
+        "tab_id": "w3:t1",
+        "pane_id": "w3:p1",
+        "focused": false,
+        "state_change_seq": 320,
+        "cwd": "/Users/dev/src/playpen",
+        "foreground_cwd": "/Users/dev/src/playpen",
+        "revision": 18
+      },
+      {
+        "terminal_id": "term_ccc0000000005",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "idle",
+        "workspace_id": "w4",
+        "tab_id": "w4:t1",
+        "pane_id": "w4:p1",
+        "focused": false,
+        "state_change_seq": 10,
+        "cwd": "/Users/dev/src/IaC",
+        "foreground_cwd": "/Users/dev/src/IaC",
+        "revision": 5
+      }
+    ]
+  }
+}

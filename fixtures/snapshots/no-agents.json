@@ -1,0 +1,55 @@
+{
+  "provenance": {
+    "kind": "derived",
+    "derivedFrom": "live-session.json",
+    "note": "HAND-DERIVED, not captured. Trimmed to the fields this scenario exercises; see blocked-one.json for a complete-shape derived snapshot.",
+    "shape": "A running session with panes but no agents at all. The empty attention set, and the one case where a dark face is honest rather than a lie — distinct from a snapshot the plugin never received, which is not this."
+  },
+  "snapshot": {
+    "version": "0.8.0",
+    "protocol": 19,
+    "focused_workspace_id": "w0",
+    "focused_tab_id": "w0:t1",
+    "focused_pane_id": "w0:p1",
+    "workspaces": [
+      {
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "nix",
+        "focused": true,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w0:t1",
+        "agent_status": "unknown"
+      }
+    ],
+    "tabs": [
+      {
+        "tab_id": "w0:t1",
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "1",
+        "focused": true,
+        "pane_count": 1,
+        "agent_status": "unknown"
+      }
+    ],
+    "panes": [
+      {
+        "pane_id": "w0:p1",
+        "terminal_id": "term_eee0000000001",
+        "workspace_id": "w0",
+        "tab_id": "w0:t1",
+        "focused": true,
+        "cwd": "/Users/dev/.config/nix",
+        "foreground_cwd": "/Users/dev/.config/nix",
+        "terminal_title": "~/.config/nix",
+        "terminal_title_stripped": "~/.config/nix",
+        "agent_status": "unknown",
+        "revision": 7
+      }
+    ],
+    "layouts": [],
+    "agents": []
+  }
+}
