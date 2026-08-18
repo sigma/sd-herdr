@@ -34,8 +34,15 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-/** herdr's placeholder session, which lives directly in the config directory. */
-const DEFAULT_SESSION = "default";
+/**
+ * herdr's placeholder session, which lives directly in the config directory.
+ *
+ * Exported because it is one concept with three readers: the path convention
+ * below, the button's unconfigured default, and the nameplate — which spends
+ * the slot on product identity rather than repeating herdr's placeholder back
+ * at the user. A literal in three files would let them drift apart.
+ */
+export const DEFAULT_SESSION = "default";
 
 /**
  * herdr's config directory: `$XDG_CONFIG_HOME/herdr`, else `~/.config/herdr`

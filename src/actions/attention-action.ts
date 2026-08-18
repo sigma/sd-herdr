@@ -1,5 +1,6 @@
 import streamDeck, {
   action,
+  type DidReceiveSettingsEvent,
   type KeyAction,
   type KeyDownEvent,
   SingletonAction,
@@ -7,104 +8,148 @@ import streamDeck, {
   type WillDisappearEvent,
 } from "@elgato/streamdeck";
 
-import { Runner } from "../core/runner.js";
+import { type Membership, SessionHub } from "../core/hub.js";
 import type { FaceDescriptor } from "../face/descriptor.js";
 import { renderFaceSvg, svgToImageUri } from "../face/render.js";
 import { clearWindowTitle, focusPane, ping, setWindowTitle, snapshot } from "../herdr/client.js";
-import { clientSocketPathFor, socketPathFor } from "../herdr/session.js";
+import { clientSocketPathFor, DEFAULT_SESSION, socketPathFor } from "../herdr/session.js";
 import { describeRaise } from "../raise/ladder.js";
 import { raise } from "../raise/spawn.js";
 
 /**
- * The session this button speaks for. A constant until #27, which makes it a
- * per-button setting and lets one Stream Deck watch several sessions.
- */
-const SESSION_NAME = "default";
-
-/**
- * What a button remembers. `hostAppBundleId` is the raise ladder's last resort:
- * it names the terminal application to raise when the process walk cannot —
- * a client inside tmux or zellij, or over SSH. Unset by default, because
- * guessing a terminal the user does not run would raise the wrong window and
- * call it success.
+ * The terminal the raise ladder falls back to when it cannot name the one
+ * hosting the session — a client inside tmux or zellij, or over SSH, where the
+ * process walk has nothing to walk.
  *
- * ⚠️ There is no property inspector yet, so nothing can write this today: the
- * plugin reads a setting the user has no dialog for until #27 builds one,
- * alongside the per-button session name.
+ * It has a default, and the default is announced rather than assumed: every
+ * press that leans on it raises an alert on the key and logs the reason, so a
+ * user running some other terminal finds out on the first press instead of
+ * wondering for months why the wrong window keeps coming forward.
  */
+const DEFAULT_HOST_APP = "com.mitchellh.ghostty";
+
+/** What a button remembers. Both settings are per-button; the poll loop is not. */
 interface ButtonSettings {
+  readonly sessionName?: string;
   readonly hostAppBundleId?: string;
   /** The SDK stores settings as free JSON; this says so without importing its type. */
   readonly [key: string]: string | undefined;
 }
 
 /**
+ * A setting, or what stands in for it when the user has left it blank. One rule
+ * for both settings: the inspector writes `""` for a field the user cleared,
+ * and an empty session name means "the one I never configured", not a session
+ * with no name. A fresh button therefore works without the inspector being
+ * opened at all.
+ */
+function configured(value: string | undefined, fallback: string): string {
+  const trimmed = value?.trim() ?? "";
+  return trimmed === "" ? fallback : trimmed;
+}
+
+/**
+ * The one hub for the whole plugin, and so the one place a poll loop can be
+ * shared. Module-level rather than per-action-instance because sharing is by
+ * *socket path*: two keys pointed at one session share a loop wherever they sit.
+ */
+const hub = new SessionHub({
+  snapshot,
+  // The pong goes to the log and nowhere else. It is the record of which herdr
+  // this button spent its life talking to — the one thing that makes a version
+  // skew after a herdr update readable after the fact.
+  ping: async (socketPath) => {
+    const pong = await ping(socketPath);
+    streamDeck.logger.info(`herdr ${pong.version}, protocol ${pong.protocol}`);
+  },
+  // The reason is logged rather than branched on: `no_foreground_client` means
+  // there is no attached terminal, and the raise then finds no window carrying
+  // the nonce and declines — the same outcome, one path.
+  setTitle: async (socketPath, nonce) => {
+    const reason = await setWindowTitle(socketPath, nonce);
+    if (reason !== "set") streamDeck.logger.debug(`window title not set: ${reason}`);
+  },
+  clearTitle: async (socketPath) => {
+    await clearWindowTitle(socketPath);
+  },
+  focusPane,
+  now: () => Date.now(),
+  report: (message) => streamDeck.logger.warn(message),
+  schedule: (ms, fn) => {
+    const handle = setTimeout(fn, ms);
+    return { cancel: () => clearTimeout(handle) };
+  },
+});
+
+/**
  * The attention button: one tile per herdr session, red while any agent in it
  * is blocked.
  *
  * Everything with an opinion lives behind the core; this class is the Stream
- * Deck end of the wire. It maps the SDK's lifecycle onto the runner and hands
- * back a way to paint, and holds one runner per action instance so two buttons
- * on two devices do not share a poll loop.
+ * Deck end of the wire. It maps the SDK's lifecycle onto a membership of the
+ * session hub, and remembers which session each key is currently pointed at so
+ * that a settings change can repoint it.
  */
 @action({ UUID: "dev.yrh.sd-herdr.attention" })
 export class AttentionAction extends SingletonAction {
-  private readonly runners = new Map<string, Runner>();
+  private readonly buttons = new Map<string, { membership: Membership; sessionName: string }>();
 
   override onWillAppear(ev: WillAppearEvent): void {
     if (!ev.action.isKey()) return;
-    this.runnerFor(ev.action).appeared();
+    this.point(
+      ev.action,
+      configured((ev.payload.settings as ButtonSettings).sessionName, DEFAULT_SESSION),
+    );
+  }
+
+  /**
+   * The property inspector wrote a setting.
+   *
+   * Only the session name is acted on here: it is what the poll loop and the
+   * cycle are keyed on. `hostAppBundleId` is read at press time instead, so
+   * changing it takes effect on the next press without disturbing anything.
+   */
+  override onDidReceiveSettings(ev: DidReceiveSettingsEvent): void {
+    if (!ev.action.isKey()) return;
+    this.point(
+      ev.action,
+      configured((ev.payload.settings as ButtonSettings).sessionName, DEFAULT_SESSION),
+    );
   }
 
   override onKeyDown(ev: KeyDownEvent): void {
     if (!ev.action.isKey()) return;
-    this.runnerFor(ev.action).pressed();
+    this.buttons.get(ev.action.id)?.membership.press();
   }
 
   override onWillDisappear(ev: WillDisappearEvent): void {
-    const runner = this.runners.get(ev.action.id);
-    if (runner === undefined) return;
-    // The button is gone, and so is the reason to poll — and with it the press
-    // cycle, whose visited set the core discards on this event.
-    runner.disappeared();
-    this.runners.delete(ev.action.id);
+    const button = this.buttons.get(ev.action.id);
+    if (button === undefined) return;
+    // The button is gone, and so is the reason to poll — and, if it was the
+    // last one on this session, the press cycle with it.
+    button.membership.leave();
+    this.buttons.delete(ev.action.id);
   }
 
-  private runnerFor(key: KeyAction): Runner {
-    const existing = this.runners.get(key.id);
-    if (existing !== undefined) return existing;
+  /**
+   * Point one key at one session, leaving whatever it was pointed at before.
+   *
+   * A key already on the right session is left alone, and that guard is
+   * load-bearing rather than tidy: `raiseFor` calls `getSettings`, which the
+   * app answers with a `didReceiveSettings` — so this runs on **every press**.
+   * Rejoining unconditionally would restart the poll loop and reset the cycle
+   * each time the button was pressed.
+   */
+  private point(key: KeyAction, sessionName: string): void {
+    const current = this.buttons.get(key.id);
+    if (current?.sessionName === sessionName) return;
+    current?.membership.leave();
 
-    const runner = new Runner(SESSION_NAME, socketPathFor(SESSION_NAME), {
-      snapshot,
-      // The pong goes to the log and nowhere else. It is the record of which
-      // herdr this button spent its life talking to — the one thing that makes
-      // a version skew after a herdr update readable after the fact.
-      ping: async (socketPath) => {
-        const pong = await ping(socketPath);
-        streamDeck.logger.info(`herdr ${pong.version}, protocol ${pong.protocol}`);
-      },
-      // The reason is logged rather than branched on: `no_foreground_client`
-      // means there is no attached terminal, and the raise then finds no window
-      // carrying the nonce and declines — the same outcome, one path.
-      setTitle: async (socketPath, nonce) => {
-        const reason = await setWindowTitle(socketPath, nonce);
-        if (reason !== "set") streamDeck.logger.debug(`window title not set: ${reason}`);
-      },
-      clearTitle: async (socketPath) => {
-        await clearWindowTitle(socketPath);
-      },
-      focusPane,
-      raise: (nonce) => raiseFor(key, nonce),
-      paint: (descriptor) => paint(key, descriptor),
-      now: () => Date.now(),
-      report: (message) => streamDeck.logger.warn(message),
-      schedule: (ms, fn) => {
-        const handle = setTimeout(fn, ms);
-        return { cancel: () => clearTimeout(handle) };
-      },
+    const membership = hub.join(sessionName, socketPathFor(sessionName), {
+      paint: (face) => paint(key, face),
+      raise: (nonce) => raiseFor(key, sessionName, nonce),
     });
-    this.runners.set(key.id, runner);
-    return runner;
+    this.buttons.set(key.id, { membership, sessionName });
   }
 }
 
@@ -118,15 +163,16 @@ export class AttentionAction extends SingletonAction {
  * condition, and it would collide with the colour the tile already owes to the
  * attention set.
  *
- * The configured host app raises the same alert even on an exact raise: it
- * means the process walk found nothing, and a silent permanent fallback is how
- * a broken walk goes unnoticed for months.
+ * The host app raises the same alert even on an exact raise: it means the
+ * process walk found nothing and the configured bundle id — the user's, or the
+ * default standing in for it — decided where the press landed. That is the one
+ * rung that cannot verify its own target, so its use is never silent.
  */
-async function raiseFor(key: KeyAction, nonce: string): Promise<void> {
+async function raiseFor(key: KeyAction, sessionName: string, nonce: string): Promise<void> {
   const { hostAppBundleId } = await key.getSettings<ButtonSettings>();
   const report = await raise(nonce, {
-    clientSocketPath: clientSocketPathFor(SESSION_NAME),
-    hostAppBundleId,
+    clientSocketPath: clientSocketPathFor(sessionName),
+    hostAppBundleId: configured(hostAppBundleId, DEFAULT_HOST_APP),
   });
   if (report.outcome === "raised" && !report.usedConfiguredHostApp) return;
   streamDeck.logger.info(`degraded: ${describeRaise(report)}`);

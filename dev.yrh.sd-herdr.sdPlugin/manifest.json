@@ -29,6 +29,7 @@
       "Name": "Attention",
       "UUID": "dev.yrh.sd-herdr.attention",
       "Icon": "imgs/actions/attention",
+      "PropertyInspectorPath": "ui/attention.html",
       "Tooltip": "Show whether any herdr agent needs attention; press to go to it",
       "SupportedInMultiActions": false,
       "States": [

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>herdr — Attention</title>
+    <style>
+      /* The inspector's own look, kept to what two text fields need. Written
+         out rather than pulled from a CDN: a plugin that talks to a unix socket
+         on this machine should not need the network to be configurable. */
+      body {
+        margin: 0;
+        padding: 12px;
+        background: #2d2d2d;
+        color: #d8d8d8;
+        font: 9pt/1.5 -apple-system, "Helvetica Neue", Helvetica, sans-serif;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      label {
+        flex: 0 0 94px;
+        text-align: right;
+        padding-right: 8px;
+        color: #969696;
+      }
+      input {
+        flex: 1;
+        min-width: 0;
+        padding: 4px 6px;
+        border: none;
+        border-radius: 3px;
+        background: #3d3d3d;
+        color: #d8d8d8;
+        font: inherit;
+      }
+      p {
+        margin: 4px 0 10px 102px;
+        color: #969696;
+      }
+      code {
+        color: #d8d8d8;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="row">
+      <label for="sessionName">Session</label>
+      <input id="sessionName" type="text" placeholder="default" />
+    </div>
+    <p>
+      The herdr session this button speaks for. One tile speaks for exactly one
+      session — add a second button for a second session. Two buttons on the
+      same session share a single poll.
+    </p>
+
+    <div class="row">
+      <label for="hostAppBundleId">Terminal app</label>
+      <input id="hostAppBundleId" type="text" placeholder="com.mitchellh.ghostty" />
+    </div>
+    <p>
+      Bundle id of the terminal hosting this session, used only when the plugin
+      cannot work out which application to raise — inside tmux or zellij, or
+      over SSH. The key flashes on any press that has to fall back to it, so a
+      wrong value here announces itself rather than quietly raising the wrong
+      window.
+    </p>
+
+    <script>
+      // The property inspector protocol, in the small: Stream Deck calls this
+      // global with a websocket to register on, and the action's current
+      // settings ride in with the registration payload.
+      let socket = null;
+      let uuid = null;
+      let settings = {};
+
+      const fields = ["sessionName", "hostAppBundleId"];
+
+      function save() {
+        if (socket === null || socket.readyState !== WebSocket.OPEN) return;
+        for (const id of fields) settings[id] = document.getElementById(id).value.trim();
+        socket.send(
+          JSON.stringify({ event: "setSettings", context: uuid, payload: settings })
+        );
+      }
+
+      function show() {
+        for (const id of fields) document.getElementById(id).value = settings[id] ?? "";
+      }
+
+      for (const id of fields) {
+        // On `change` rather than on every keystroke: each write reaches the
+        // plugin as a settings event, and a repointed session name restarts a
+        // poll loop.
+        document.getElementById(id).addEventListener("change", save);
+      }
+
+      function connectElgatoStreamDeckSocket(port, inUUID, registerEvent, _info, actionInfo) {
+        uuid = inUUID;
+        settings = JSON.parse(actionInfo).payload.settings ?? {};
+        show();
+
+        socket = new WebSocket(`ws://127.0.0.1:${port}`);
+        socket.onopen = () => socket.send(JSON.stringify({ event: registerEvent, uuid: inUUID }));
+        socket.onmessage = (message) => {
+          const data = JSON.parse(message.data);
+          if (data.event !== "didReceiveSettings") return;
+          settings = data.payload.settings ?? {};
+          show();
+        };
+      }
+    </script>
+  </body>
+</html>

@@ -72,6 +72,29 @@ One rank of the priority order. The `blocked` and `done` tiers differ mechanical
 just in urgency: focusing a `done` agent consumes it, focusing a `blocked` agent
 changes nothing. Ranks of the *raise ladder* are **rungs**, never tiers.
 
+## The button
+
+**`sessionName`**:
+The per-button setting naming the herdr session a tile speaks for, defaulting to
+`default`. **One tile speaks for exactly one session** — that is what keeps the face's
+single colour meaningful — so watching two sessions means two buttons. Resolved to a
+socket path by herdr's on-disk *convention* rather than by `herdr session list`
+([#20](https://github.com/sigma/sd-herdr/issues/20)): the listing needs the `herdr`
+binary, which is not on a plugin's PATH, and "is it running" is better answered by
+connecting. Changing it repoints the button, which re-resolves the socket and starts the
+cycle over.
+
+**Poll loop**:
+One socket path's snapshot loop, **shared by every button pointed at it**. A snapshot is
+~110 ms and ~15 KB, so two tiles on one session must cost one poll rather than two. They
+share the *cycle* as well, which is the honest reading of a visited set that belongs to a
+session: two tiles on one session are two views of one walk through it. What stays
+per-button is the **raise**, since it ends at a particular key with that key's own
+`hostAppBundleId` and its own alert — each press is remembered until its raise comes
+back. The one exception is a button that goes away mid-press: its raise is handed to a
+button that is still there rather than dropped, because the nonce is already in the
+window title and the user still asked to be taken to the session.
+
 ## The cycle
 
 **Press**:
@@ -176,9 +199,13 @@ our own connection's peer returns the daemon).
 
 **`hostAppBundleId`**:
 The per-button setting naming the application to raise when host-app discovery cannot.
-Unset by default — guessing a terminal the user does not run would raise the wrong
-window and call it success. Its use is **surfaced**, on every press that leans on it,
-because a silent permanent fallback is how a broken walk goes unnoticed for months.
+Defaults to `com.mitchellh.ghostty` ([#27](https://github.com/sigma/sd-herdr/issues/27)),
+which is safe only because its use is **surfaced**: every press that leans on it flashes
+the key and logs the rung, since a silent permanent fallback is how a broken walk goes
+unnoticed for months. The default is what makes that alert load-bearing rather than
+decorative — on a machine running some other terminal, rung 3 will `open` the configured
+app, so a wrong value **launches an application the user does not run**. The alert is the
+only thing standing between that and a mystery.
 
 **Window-manager adapter**:
 The rung that asks the user's tiling window manager to raise a window by id. Generic and
@@ -197,6 +224,17 @@ speak different axes and are allowed to disagree — colour is
 the whole session, the label is where the next press goes, the dots are everyone else
 still waiting. In particular a red bar over an amber-tier label is correct, not a bug
 ([#12](https://github.com/sigma/sd-herdr/issues/12)).
+
+**Pips**:
+The tier-coloured dots for the **other** waiters — everyone in the attention set the
+body does not name, in priority order. The named agent never gets a dot, so body and
+pips never restate each other. The row draws at most **four** and then says `…` rather
+than counting: past four, "several more are waiting" is the whole of what a 72px tile
+can carry, and an exact count is not something a user acts on differently. The
+hollow-vs-filled axis stays deliberately unused (see **Tab-scoped consumption**). An
+`unknown` pip is drawn in the plate's grey *ink*, not its fill: a 4px dot the colour of
+the grey plate vanishes against the tile's ground, which would count a waiter the face
+does not show.
 
 **Nameplate**:
 The state-coloured bar across the top of the tile, carrying the session name. It **clips

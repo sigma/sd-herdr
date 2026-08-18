@@ -23,6 +23,7 @@ import {
   type PipColour,
   type StateColour,
 } from "../face/descriptor.js";
+import { DEFAULT_SESSION } from "../herdr/session.js";
 import type { Snapshot } from "../herdr/snapshot.js";
 import { type AttentionAgent, type AttentionStatus, attentionSet } from "./attention.js";
 import { bodyFor } from "./body.js";
@@ -478,7 +479,7 @@ export function face(state: CoreState): FaceDescriptor {
     stateColour: colour,
     // `default` is herdr's placeholder rather than a name the user chose, so
     // the slot buys product identity instead.
-    nameplate: state.sessionName === "default" ? "herdr" : state.sessionName,
+    nameplate: state.sessionName === DEFAULT_SESSION ? "herdr" : state.sessionName,
     body: state.snapshot === null ? "" : bodyFor(state.snapshot, set, target),
     pips: others.slice(0, PIP_CAP).map((agent) => TIER_COLOUR[agent.status]),
     pipOverflow: others.length > PIP_CAP,
