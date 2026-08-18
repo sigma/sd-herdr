@@ -163,6 +163,23 @@ Refusing to raise at all, rather than reaching for a rung known to be wrong here
 failure: the press's focus has already happened, so the session did move — only the
 window did not follow.
 
+**Host-app discovery**:
+Naming the terminal *application* that hosts the session, which rung 2 must do before
+it can script anything: correlate herdr's client socket in `lsof` to the connected
+client process, walk its `ppid` chain to the ancestor `launchd` started, and ask
+`System Events` for that pid's bundle id. **Rung-2-only machinery, off the hot path** —
+a machine with a window manager never reaches it, and so never sends an Apple Event at
+all. Its failure cases are real rather than defensive: a client inside tmux or zellij
+terminates at a daemonised multiplexer, which is not a GUI application.
+_Avoid_: peer pid (both herdr sockets are listened on by the *server*, so asking for
+our own connection's peer returns the daemon).
+
+**`hostAppBundleId`**:
+The per-button setting naming the application to raise when host-app discovery cannot.
+Unset by default — guessing a terminal the user does not run would raise the wrong
+window and call it success. Its use is **surfaced**, on every press that leans on it,
+because a silent permanent fallback is how a broken walk goes unnoticed for months.
+
 **Window-manager adapter**:
 The rung that asks the user's tiling window manager to raise a window by id. Generic and
 app-agnostic — the only path that reaches a terminal that answers no window queries at

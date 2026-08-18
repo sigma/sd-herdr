@@ -61,8 +61,34 @@ export function socketPathFor(
   env: NodeJS.ProcessEnv = process.env,
   home: string = homedir(),
 ): string {
+  return sessionSocket(sessionName, "herdr.sock", env, home);
+}
+
+/**
+ * The *other* socket in the same directory: the one the server listens on for
+ * its TUI clients (`herdr-client.sock`, verified beside `herdr.sock` on a live
+ * install).
+ *
+ * The plugin never speaks this protocol. It needs the path only as a name to
+ * correlate against in `lsof` output, which is how the raise ladder finds the
+ * process — and so the terminal application — hosting the session.
+ */
+export function clientSocketPathFor(
+  sessionName: string,
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = homedir(),
+): string {
+  return sessionSocket(sessionName, "herdr-client.sock", env, home);
+}
+
+function sessionSocket(
+  sessionName: string,
+  file: string,
+  env: NodeJS.ProcessEnv,
+  home: string,
+): string {
   const dir = configDir(env, home);
   return sessionName === DEFAULT_SESSION
-    ? join(dir, "herdr.sock")
-    : join(dir, "sessions", sessionName, "herdr.sock");
+    ? join(dir, file)
+    : join(dir, "sessions", sessionName, file);
 }

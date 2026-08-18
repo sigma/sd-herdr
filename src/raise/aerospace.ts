@@ -7,8 +7,9 @@
  * It is also the only rung that is app-agnostic — it raises a WezTerm window by
  * title, which AppleScript cannot do at all.
  *
- * The rungs below it (an AppleScript table per bundle id, then `open -b`, then
- * declining) are #8's. Note the carve-out this file already implements: when
+ * The rungs below it — an AppleScript table per bundle id, then `open -b`, then
+ * declining — live in `applescript.ts` and `ladder.ts`. The carve-out that
+ * keeps them out of reach on a machine running a tiler is the ladder's: when
  * AeroSpace is present and the nonce simply did not match, the answer is
  * **decline**, never an application-level raise — under a tiling window manager
  * that call deterministically fronts the window on the workspace the user is

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { socketPathFor } from "./session.js";
+import { clientSocketPathFor, socketPathFor } from "./session.js";
 
 const HOME = "/Users/dev";
 
@@ -28,6 +28,18 @@ describe("socketPathFor", () => {
     // might have; taking it literally would resolve the path against `/`.
     expect(socketPathFor("default", { XDG_CONFIG_HOME: "" }, HOME)).toBe(
       "/Users/dev/.config/herdr/herdr.sock",
+    );
+  });
+
+  it("names the client socket beside it, which is what the raise walk correlates on", () => {
+    // Verified on a live install: `herdr-client.sock` sits next to `herdr.sock`
+    // in the same directory. The plugin never speaks that protocol — it needs
+    // the path only as a name to match in `lsof` output.
+    expect(clientSocketPathFor("default", {}, HOME)).toBe(
+      "/Users/dev/.config/herdr/herdr-client.sock",
+    );
+    expect(clientSocketPathFor("work", {}, HOME)).toBe(
+      "/Users/dev/.config/herdr/sessions/work/herdr-client.sock",
     );
   });
 

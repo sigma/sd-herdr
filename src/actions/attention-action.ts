@@ -11,7 +11,8 @@ import { Runner } from "../core/runner.js";
 import type { FaceDescriptor } from "../face/descriptor.js";
 import { renderFaceSvg, svgToImageUri } from "../face/render.js";
 import { clearWindowTitle, focusPane, setWindowTitle, snapshot } from "../herdr/client.js";
-import { socketPathFor } from "../herdr/session.js";
+import { clientSocketPathFor, socketPathFor } from "../herdr/session.js";
+import { describeRaise } from "../raise/ladder.js";
 import { raise } from "../raise/spawn.js";
 
 /**
@@ -19,6 +20,23 @@ import { raise } from "../raise/spawn.js";
  * per-button setting and lets one Stream Deck watch several sessions.
  */
 const SESSION_NAME = "default";
+
+/**
+ * What a button remembers. `hostAppBundleId` is the raise ladder's last resort:
+ * it names the terminal application to raise when the process walk cannot —
+ * a client inside tmux or zellij, or over SSH. Unset by default, because
+ * guessing a terminal the user does not run would raise the wrong window and
+ * call it success.
+ *
+ * ⚠️ There is no property inspector yet, so nothing can write this today: the
+ * plugin reads a setting the user has no dialog for until #27 builds one,
+ * alongside the per-button session name.
+ */
+interface ButtonSettings {
+  readonly hostAppBundleId?: string;
+  /** The SDK stores settings as free JSON; this says so without importing its type. */
+  readonly [key: string]: string | undefined;
+}
 
 /**
  * The attention button: one tile per herdr session, red while any agent in it
@@ -69,7 +87,7 @@ export class AttentionAction extends SingletonAction {
         await clearWindowTitle(socketPath);
       },
       focusPane,
-      raise,
+      raise: (nonce) => raiseFor(key, nonce),
       paint: (descriptor) => paint(key, descriptor),
       now: () => Date.now(),
       report: (message) => streamDeck.logger.warn(message),
@@ -81,6 +99,31 @@ export class AttentionAction extends SingletonAction {
     this.runners.set(key.id, runner);
     return runner;
   }
+}
+
+/**
+ * Climb the raise ladder for one press, and tell the user when it did not end
+ * in an exact raise.
+ *
+ * The signal is a **transient alert on the key, never the face**. A raise
+ * outcome is per-press; the face is session state. Painting "the window did not
+ * follow" onto the tile would make a momentary event look like a standing
+ * condition, and it would collide with the colour the tile already owes to the
+ * attention set.
+ *
+ * The configured host app raises the same alert even on an exact raise: it
+ * means the process walk found nothing, and a silent permanent fallback is how
+ * a broken walk goes unnoticed for months.
+ */
+async function raiseFor(key: KeyAction, nonce: string): Promise<void> {
+  const { hostAppBundleId } = await key.getSettings<ButtonSettings>();
+  const report = await raise(nonce, {
+    clientSocketPath: clientSocketPathFor(SESSION_NAME),
+    hostAppBundleId,
+  });
+  if (report.outcome === "raised" && !report.usedConfiguredHostApp) return;
+  streamDeck.logger.info(`degraded: ${describeRaise(report)}`);
+  await key.showAlert();
 }
 
 /**
