@@ -10,6 +10,8 @@ import {
   initial,
   POLL_INTERVAL_MS,
   reduce,
+  SETTLE_WINDOW_MS,
+  STALENESS_DEADLINE_MS,
 } from "./core.js";
 
 /** Where the `default` session's socket lives, by herdr's path convention. */
@@ -156,6 +158,8 @@ describe("face", () => {
 describe("reduce", () => {
   it("snapshots the session's socket as soon as the button appears", () => {
     expect(drive([APPEAR]).last).toEqual([
+      // The startup ping, which names the server this loop will be talking to.
+      { type: "ping", socketPath: SOCK },
       { type: "snapshot", socketPath: SOCK },
       { type: "tickAfter", ms: 500 },
     ]);
@@ -217,6 +221,7 @@ describe("reduce", () => {
       { type: "appeared", at: 5000 },
     ]);
     expect(last).toEqual([
+      { type: "ping", socketPath: SOCK },
       { type: "snapshot", socketPath: SOCK },
       { type: "tickAfter", ms: 500 },
     ]);
@@ -673,6 +678,111 @@ describe("the pips", () => {
   it("has no pips when nothing is waiting, and none while grey", () => {
     expect(pipsAfter("no-agents")).toMatchObject({ pips: [], pipOverflow: false });
     expect(pipsAfter("unknown-only")).toMatchObject({ pips: [], pipOverflow: false });
+  });
+});
+
+describe("settling after a server restart", () => {
+  /** A good snapshot, then a boundary at 3000, then whatever the test wants. */
+  const acrossBoundary = (...events: CoreEvent[]) =>
+    drive([APPEAR, snapshotAt(2000, "blocked-one"), snapshotAt(3000, "restart-empty"), ...events]);
+
+  it("detects the restart from a terminal_id that changed under a stable pane_id", () => {
+    // Nothing else moved: the panes are the same panes, under the same ids.
+    expect(face(acrossBoundary().state).stateColour).toBe("grey");
+  });
+
+  it("detects it even though every agent vanished and every seq with them", () => {
+    // The two cases the earlier seq-regression rule could not see. The
+    // snapshot in hand has no agents at all, and would render dark.
+    expect(fixture("restart-empty").agents).toEqual([]);
+    expect(face(acrossBoundary().state).stateColour).toBe("grey");
+  });
+
+  /** The polls that keep coming during the hold — the data is never the reason it is grey. */
+  const polling = (...at: number[]): CoreEvent[] => at.map((t) => snapshotAt(t, "restart-empty"));
+
+  it("holds grey for four seconds, then trusts the data regardless", () => {
+    // The snapshots keep landing and keep saying "no agents". The hold, not
+    // the staleness deadline, is what makes this grey.
+    expect(face(acrossBoundary(...polling(4000, 5000, 6000, 6900)).state).stateColour).toBe("grey");
+    // The window ends on a fixed timer, not on the data agreeing — after a
+    // stop/restart the data never will, and a dark tile is then honest.
+    expect(face(acrossBoundary(...polling(4000, 5000, 6000, 7000)).state).stateColour).toBe("dark");
+  });
+
+  it("settles to dark after a stop/restart, where nothing ever comes back", () => {
+    const dead = acrossBoundary(
+      snapshotAt(4000, "restart-empty"),
+      snapshotAt(5000, "restart-empty"),
+      snapshotAt(6000, "restart-empty"),
+      snapshotAt(7000, "restart-empty"),
+    );
+    expect(face(dead.state)).toMatchObject({ stateColour: "dark", body: "" });
+  });
+
+  it("is correct again once a live handoff has re-detected its agents", () => {
+    // Agents reappear at ~0.4 s but correct statuses only at ~3.74 s, so the
+    // window is sized for the second number, not the first.
+    const back = acrossBoundary(snapshotAt(6800, "restart-redetected"));
+    expect(face(back.state).stateColour).toBe("grey");
+    expect(face(drive([tickAt(7000)], back.state).state).stateColour).toBe("red");
+  });
+
+  it("does not settle again on every poll of the new lifetime", () => {
+    // One boundary, one hold: a rotation detected twice would restart the
+    // window forever and pin the tile grey.
+    const settled = acrossBoundary(
+      snapshotAt(4000, "restart-redetected"),
+      snapshotAt(5000, "restart-redetected"),
+      tickAt(7000),
+    );
+    expect(face(settled.state).stateColour).toBe("red");
+  });
+
+  it("sizes the hold from its own constant, not the staleness deadline", () => {
+    // Two deadlines answering two questions. Sharing one constant would make a
+    // change to either a silent change to the other.
+    expect(SETTLE_WINDOW_MS).toBe(4000);
+    expect(SETTLE_WINDOW_MS).not.toBe(STALENESS_DEADLINE_MS);
+  });
+
+  it("pings on the restart, and on nothing else in between", () => {
+    const { effects } = acrossBoundary(
+      snapshotAt(4000, "restart-empty"),
+      { type: "pollDue", at: 5000 },
+      snapshotAt(5100, "restart-redetected"),
+    );
+    // Two: the one at startup, and the one for the boundary. Never per poll.
+    expect(effects.filter((e) => e.type === "ping")).toEqual([
+      { type: "ping", socketPath: SOCK },
+      { type: "ping", socketPath: SOCK },
+    ]);
+  });
+
+  it("clears the visited set, because the agents behind those panes are new", () => {
+    const { effects } = drive([
+      APPEAR,
+      snapshotAt(2000, "blocked-one"),
+      { type: "pressed", at: 2100 },
+      snapshotAt(3000, "restart-empty"),
+      snapshotAt(6000, "restart-redetected"),
+      snapshotAt(7100, "restart-redetected"),
+      { type: "pressed", at: 7200 },
+    ]);
+    // w0:p1 was visited before the boundary and is reachable again after it.
+    expect(effects.filter((e) => e.type === "focusPane").map((e) => e.paneId)).toEqual([
+      "w0:p1",
+      "w0:p1",
+    ]);
+  });
+
+  it("aims a press at nothing while it is settling", () => {
+    // Settling is grey, and grey never acts on data the plugin distrusts.
+    const { last } = acrossBoundary(snapshotAt(4000, "restart-redetected"), {
+      type: "pressed",
+      at: 4100,
+    });
+    expect(last.map((e) => e.type)).toEqual(["setTitle", "raise", "clearTitle"]);
   });
 });
 

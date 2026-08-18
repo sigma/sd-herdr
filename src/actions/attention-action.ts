@@ -10,7 +10,7 @@ import streamDeck, {
 import { Runner } from "../core/runner.js";
 import type { FaceDescriptor } from "../face/descriptor.js";
 import { renderFaceSvg, svgToImageUri } from "../face/render.js";
-import { clearWindowTitle, focusPane, setWindowTitle, snapshot } from "../herdr/client.js";
+import { clearWindowTitle, focusPane, ping, setWindowTitle, snapshot } from "../herdr/client.js";
 import { clientSocketPathFor, socketPathFor } from "../herdr/session.js";
 import { describeRaise } from "../raise/ladder.js";
 import { raise } from "../raise/spawn.js";
@@ -76,6 +76,13 @@ export class AttentionAction extends SingletonAction {
 
     const runner = new Runner(SESSION_NAME, socketPathFor(SESSION_NAME), {
       snapshot,
+      // The pong goes to the log and nowhere else. It is the record of which
+      // herdr this button spent its life talking to — the one thing that makes
+      // a version skew after a herdr update readable after the fact.
+      ping: async (socketPath) => {
+        const pong = await ping(socketPath);
+        streamDeck.logger.info(`herdr ${pong.version}, protocol ${pong.protocol}`);
+      },
       // The reason is logged rather than branched on: `no_foreground_client`
       // means there is no attached terminal, and the raise then finds no window
       // carrying the nonce and declines — the same outcome, one path.

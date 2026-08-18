@@ -26,6 +26,7 @@ import {
 import type { Snapshot } from "../herdr/snapshot.js";
 import { type AttentionAgent, type AttentionStatus, attentionSet } from "./attention.js";
 import { bodyFor } from "./body.js";
+import { isRestart, terminalsOf } from "./lifetime.js";
 
 /**
  * What each tier of the attention set says the bar should be.
@@ -57,6 +58,24 @@ export const POLL_INTERVAL_MS = 1000;
  * produces no events *at all* — which is what the heartbeat below is for.
  */
 export const STALENESS_DEADLINE_MS = 3000;
+
+/**
+ * How long the face is held grey after a server lifetime boundary, before the
+ * data is trusted again.
+ *
+ * **Deliberately a separate constant from the staleness deadline.** They answer
+ * different questions — one asks whether the data is recent, the other whether
+ * a herdr that has just come back has finished making sense — and tying them
+ * together would make a change to either a silent change to the other.
+ *
+ * Sized for the slower of the two boundary shapes, because they are
+ * indistinguishable at the moment they happen: a live handoff brings agents
+ * back at ~0.4 s but correct statuses only at ~3.74 s, since re-detected state
+ * is seeded `Idle` under a 3 s startup grace window
+ * (`docs/research/herdr-detected-agent-restart.md`). A stop/restart resolves to
+ * nothing at all, and 4 s of grey before an honest dark tile costs nothing.
+ */
+export const SETTLE_WINDOW_MS = 4000;
 
 /**
  * The longest gap between retries. Failures back off — one unreachable socket
@@ -99,6 +118,13 @@ export type CoreEvent =
 /** What the core asks the world for. Data — the adapters decide how. */
 export type Effect =
   | { readonly type: "snapshot"; readonly socketPath: string }
+  /**
+   * Ask the server what it is. Issued on startup and on a detected restart
+   * **only**, never per poll: it answers a question — which herdr build is on
+   * the other end of this socket — that changes exactly when a server lifetime
+   * does, and the snapshot poll is already carrying the running cost.
+   */
+  | { readonly type: "ping"; readonly socketPath: string }
   | { readonly type: "pollAfter"; readonly ms: number }
   | { readonly type: "tickAfter"; readonly ms: number }
   | { readonly type: "setTitle"; readonly socketPath: string; readonly nonce: string }
@@ -143,12 +169,26 @@ export interface CoreState {
    * back rather than left to cost the cycle a step.
    */
   readonly aimedAt: string | null;
+  /**
+   * The last snapshot's `pane_id → terminal_id` map — the whole of what the
+   * core remembers about the server lifetime it is talking to.
+   */
+  readonly terminals: ReadonlyMap<string, string>;
+  /**
+   * When the settling grey ends, or 0 for "not settling". A deadline rather
+   * than a flag, for the same reason staleness is: it is answered by comparing
+   * two numbers the events carry, and nothing has to be cancelled.
+   */
+  readonly settlingUntil: number;
   /** When the last event happened. The core's only notion of time. */
   readonly at: number;
 }
 
 /** One shared empty set, so an untouched cycle allocates nothing. */
 const NO_PANES: ReadonlySet<string> = new Set();
+
+/** The same, for a core that has not seen a snapshot yet. */
+const NO_TERMINALS: ReadonlyMap<string, string> = new Map();
 
 /** A core that has not seen anything yet. */
 export function initial(sessionName: string, socketPath: string): CoreState {
@@ -162,6 +202,8 @@ export function initial(sessionName: string, socketPath: string): CoreState {
     presses: 0,
     visited: NO_PANES,
     aimedAt: null,
+    terminals: NO_TERMINALS,
+    settlingUntil: 0,
     at: 0,
   };
 }
@@ -232,12 +274,22 @@ export function reduce(
       // second poll chain running alongside the first.
       if (state.visible) return { state: { ...state, at }, effects: [] };
       const next = { ...state, visible: true, at };
-      return { state: next, effects: [...probe(next), ...scheduleTick(next)] };
+      // The ping is the startup half of "startup and restart only": it names
+      // the server this loop is about to spend its life talking to, and is the
+      // only record of a herdr that updated underneath the plugin.
+      return {
+        state: next,
+        effects: [
+          { type: "ping", socketPath: next.socketPath },
+          ...probe(next),
+          ...scheduleTick(next),
+        ],
+      };
     }
 
     case "disappeared":
       // One of the cycle's three resets — the others are the wrap and a
-      // detected server restart (#26). The visited set is in-memory only and is
+      // detected server restart. The visited set is in-memory only and is
       // never persisted: it is a record of one sitting at the keyboard, and
       // restoring it would leave the button starting mid-cycle for reasons the
       // user cannot see.
@@ -251,8 +303,28 @@ export function reduce(
       // the next dropped poll starts counting from scratch rather than
       // inheriting a five-second gap from an outage that is over.
       const next = { ...state, snapshot: event.snapshot, snapshotAt: at, failures: 0, at };
+      const terminals = terminalsOf(event.snapshot);
+      const restarted = isRestart(state.terminals, terminals);
+
+      // A restart is the third of the cycle's three resets — the others are the
+      // wrap and `willDisappear`. The panes may well still be there, but the
+      // agents in them are new, and a visited set carried across says a user
+      // has answered agents that did not exist when they pressed.
+      if (restarted) {
+        return {
+          state: {
+            ...next,
+            terminals,
+            settlingUntil: at + SETTLE_WINDOW_MS,
+            visited: NO_PANES,
+            aimedAt: null,
+          },
+          effects: [{ type: "ping", socketPath: next.socketPath }, ...schedulePoll(next)],
+        };
+      }
+
       return {
-        state: { ...next, visited: settle(state.visited, ordered(next)) },
+        state: { ...next, terminals, visited: settle(state.visited, ordered(next)) },
         effects: schedulePoll(next),
       };
     }
@@ -425,6 +497,13 @@ export function face(state: CoreState): FaceDescriptor {
 function stateColour(state: CoreState): StateColour {
   if (state.snapshot === null) return "grey";
   if (state.at - state.snapshotAt >= STALENESS_DEADLINE_MS) return "grey";
+
+  // Settling: the one place the plugin deliberately overrides its own data.
+  // During the gap the agents are absent from `agents[]` entirely, so the raw
+  // snapshot would render *dark* — an all-clear about a session whose state is
+  // simply not knowable yet. It ends on a fixed timer rather than on the data
+  // agreeing, because after a stop/restart the data never will.
+  if (state.at < state.settlingUntil) return "grey";
 
   // The attention set is already in priority order, so its head is the most
   // urgent thing in the session and its tier is the colour. Reading the colour

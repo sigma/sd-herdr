@@ -20,6 +20,12 @@ export interface Timer {
 export interface Adapters {
   /** One snapshot, or a rejection. */
   snapshot(socketPath: string): Promise<Snapshot>;
+  /**
+   * Ask the server what it is. The result goes nowhere the core can see it —
+   * this is a record for the log, not an input to the face — so a failed ping
+   * changes nothing but what the log says.
+   */
+  ping(socketPath: string): Promise<void>;
   /** Mark the session's host terminal window, so the raise has something to aim at. */
   setTitle(socketPath: string, nonce: string): Promise<void>;
   /** Put the terminal's own title back. */
@@ -145,6 +151,13 @@ export class Runner {
             this.dispatch({ type: "snapshotTaken", at: this.adapters.now(), snapshot }),
           )
           .catch(() => this.dispatch({ type: "snapshotFailed", at: this.adapters.now() }));
+        return;
+
+      case "ping":
+        // Nothing waits on the answer, and nothing branches on it: a ping that
+        // fails is a socket that is down, which the very next snapshot says
+        // more usefully.
+        await this.attempt("ping", () => this.adapters.ping(effect.socketPath));
         return;
 
       case "pollAfter":

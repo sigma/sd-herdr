@@ -45,6 +45,8 @@ Derived fixtures carry only the fields their scenario exercises, and say so.
 | `snapshots/done-pair.json` | derived | Two `done` agents tiled in one tab, plus a third alone — the tab-scoped consumption case. |
 | `snapshots/done-pair-consumed.json` | derived | `done-pair.json` one poll after a press: the whole tab came back `idle`. |
 | `snapshots/done-pair-newcomer.json` | derived | `done-pair.json` plus an agent that arrived mid-cycle, last in priority order. |
+| `snapshots/restart-empty.json` | derived | Every `terminal_id` rotated under a stable `pane_id`, and no agents — a server lifetime boundary. |
+| `snapshots/restart-redetected.json` | derived | The same boundary once a live handoff has re-detected its agents. |
 
 ## Adding one
 

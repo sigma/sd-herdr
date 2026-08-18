@@ -23,6 +23,8 @@ export const FIXTURE_NAMES = [
   "done-pair",
   "done-pair-consumed",
   "done-pair-newcomer",
+  "restart-empty",
+  "restart-redetected",
 ] as const;
 
 /**

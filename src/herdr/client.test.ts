@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { decodeResponse, decodeSnapshot, decodeTitleReason, HerdrError } from "./client.js";
+import {
+  decodePong,
+  decodeResponse,
+  decodeSnapshot,
+  decodeTitleReason,
+  HerdrError,
+} from "./client.js";
 
 /**
  * The socket itself is edge and is verified by hand against a live herdr. What
@@ -39,6 +45,21 @@ describe("decodeResponse", () => {
     expect(() =>
       decodeResponse('{"id":"","error":{"code":"invalid_request","message":"bad"}}'),
     ).toThrow(/bad/);
+  });
+});
+
+describe("decodePong", () => {
+  it("reads the version and protocol off a real pong", () => {
+    const line =
+      '{"id":"p1","result":{"type":"pong","version":"0.8.0","protocol":19,' +
+      '"capabilities":{"live_handoff":true,"detached_server_daemon":true}}}';
+    expect(decodePong(line)).toEqual({ version: "0.8.0", protocol: 19 });
+  });
+
+  it("rejects a pong that names no version, rather than inventing one", () => {
+    expect(() => decodePong('{"id":"p1","result":{"type":"pong","protocol":19}}')).toThrow(
+      HerdrError,
+    );
   });
 });
 

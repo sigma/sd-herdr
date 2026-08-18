@@ -1,0 +1,134 @@
+{
+  "provenance": {
+    "kind": "derived",
+    "derivedFrom": "blocked-one.json",
+    "note": "HAND-DERIVED, not captured. Measured behaviour, invented bytes: docs/research/herdr-restart-settling.md records that every pane keeps its `pane_id` and is issued a fresh `terminal_id` across a server lifetime boundary, and that `agents[]` empties and does not repopulate on its own. This is `blocked-one.json` with exactly that applied.",
+    "shape": "The moment after a server lifetime boundary, whichever shape it was: the same two panes under the same `pane_id`s, every `terminal_id` rotated, and `agents[]` empty. It is also the resting state of a stop/restart, where nothing ever comes back — so a dark tile after settling is honest here, not a lie."
+  },
+  "snapshot": {
+    "version": "0.8.0",
+    "protocol": 19,
+    "focused_workspace_id": "w1",
+    "focused_tab_id": "w1:t1",
+    "focused_pane_id": "w1:p1",
+    "workspaces": [
+      {
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "nix",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w0:t1",
+        "agent_status": "unknown"
+      },
+      {
+        "workspace_id": "w1",
+        "number": 2,
+        "label": "trunk",
+        "focused": true,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w1:t1",
+        "agent_status": "unknown"
+      }
+    ],
+    "tabs": [
+      {
+        "tab_id": "w0:t1",
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "unknown"
+      },
+      {
+        "tab_id": "w1:t1",
+        "workspace_id": "w1",
+        "number": 1,
+        "label": "1",
+        "focused": true,
+        "pane_count": 1,
+        "agent_status": "unknown"
+      }
+    ],
+    "panes": [
+      {
+        "pane_id": "w0:p1",
+        "terminal_id": "term_bbb0000000001",
+        "workspace_id": "w0",
+        "tab_id": "w0:t1",
+        "focused": false,
+        "cwd": "/Users/dev/.config/nix",
+        "foreground_cwd": "/Users/dev/.config/nix",
+        "agent_status": "unknown",
+        "revision": 12
+      },
+      {
+        "pane_id": "w1:p1",
+        "terminal_id": "term_bbb0000000002",
+        "workspace_id": "w1",
+        "tab_id": "w1:t1",
+        "focused": true,
+        "cwd": "/Users/dev/src/trunk",
+        "foreground_cwd": "/Users/dev/src/trunk",
+        "agent_status": "unknown",
+        "revision": 40
+      }
+    ],
+    "layouts": [
+      {
+        "workspace_id": "w0",
+        "tab_id": "w0:t1",
+        "zoomed": false,
+        "area": {
+          "x": 0,
+          "y": 0,
+          "width": 255,
+          "height": 163
+        },
+        "focused_pane_id": "w0:p1",
+        "panes": [
+          {
+            "pane_id": "w0:p1",
+            "focused": true,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 255,
+              "height": 163
+            }
+          }
+        ],
+        "splits": []
+      },
+      {
+        "workspace_id": "w1",
+        "tab_id": "w1:t1",
+        "zoomed": false,
+        "area": {
+          "x": 0,
+          "y": 0,
+          "width": 255,
+          "height": 163
+        },
+        "focused_pane_id": "w1:p1",
+        "panes": [
+          {
+            "pane_id": "w1:p1",
+            "focused": true,
+            "rect": {
+              "x": 0,
+              "y": 0,
+              "width": 255,
+              "height": 163
+            }
+          }
+        ],
+        "splits": []
+      }
+    ],
+    "agents": []
+  }
+}

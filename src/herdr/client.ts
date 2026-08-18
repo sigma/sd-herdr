@@ -71,6 +71,27 @@ export function decodeSnapshot(line: string): Snapshot {
   return snapshot as Snapshot;
 }
 
+/** What a `ping` says about the server on the other end of the socket. */
+export interface Pong {
+  readonly version: string;
+  readonly protocol: number;
+}
+
+/**
+ * Narrow a `ping` result to the two fields worth keeping.
+ *
+ * A pong without them is a decoding failure rather than a partial answer: this
+ * response exists to say *which herdr this is*, and a version-less one has not
+ * said it.
+ */
+export function decodePong(line: string): Pong {
+  const result = decodeResponse(line) as { version?: unknown; protocol?: unknown };
+  if (typeof result.version !== "string" || typeof result.protocol !== "number") {
+    throw new HerdrError("invalid_response", "ping answered without a version and protocol");
+  }
+  return { version: result.version, protocol: result.protocol };
+}
+
 /**
  * What herdr did with a window title. `no_foreground_client` is the one that
  * matters: a normal, successful response saying the call did nothing, because
@@ -143,6 +164,18 @@ function request(socketPath: string, method: string, params: object = {}): Promi
       finish(() => reject(new HerdrError("closed", "herdr closed without responding"))),
     );
   });
+}
+
+/**
+ * Ask the server what it is: version, protocol number, capability flags.
+ *
+ * Version discovery is an ordinary request rather than a handshake, so this is
+ * issued only when the answer can have changed — on startup and on a detected
+ * server lifetime boundary — and never on the poll path, which already proves
+ * the socket answers.
+ */
+export async function ping(socketPath: string): Promise<Pong> {
+  return decodePong(await request(socketPath, "ping"));
 }
 
 /** Take one snapshot of the session behind a socket. */

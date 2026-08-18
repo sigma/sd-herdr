@@ -24,6 +24,9 @@ function world(overrides: Partial<Adapters> = {}) {
       calls.push(`snapshot:${socketPath}`);
       return fixture("blocked-one");
     },
+    async ping(socketPath) {
+      calls.push(`ping:${socketPath}`);
+    },
     async setTitle(_socketPath, nonce) {
       calls.push(`setTitle:${nonce}`);
     },
@@ -81,7 +84,7 @@ describe("Runner", () => {
     runner.appeared();
     await w.settle();
 
-    expect(w.calls).toEqual([`snapshot:${SOCK}`]);
+    expect(w.calls).toEqual([`ping:${SOCK}`, `snapshot:${SOCK}`]);
     expect(w.painted.at(-1)?.stateColour).toBe("red");
   });
 
@@ -121,7 +124,7 @@ describe("Runner", () => {
     w.fireTimers();
     await w.settle();
 
-    expect(w.calls).toEqual([`snapshot:${SOCK}`, `snapshot:${SOCK}`]);
+    expect(w.calls).toEqual([`ping:${SOCK}`, `snapshot:${SOCK}`, `snapshot:${SOCK}`]);
   });
 
   it("stops dead when the button disappears", async () => {
@@ -136,7 +139,7 @@ describe("Runner", () => {
 
     // The heartbeat stops with the poll: an invisible button costs nothing at all.
     expect(w.pendingDelays()).toEqual([]);
-    expect(w.calls).toEqual([`snapshot:${SOCK}`]);
+    expect(w.calls).toEqual([`ping:${SOCK}`, `snapshot:${SOCK}`]);
   });
 
   it("redraws only when the face changes, not once per poll", async () => {
@@ -237,6 +240,7 @@ describe("Runner", () => {
     await w.settle();
 
     expect(w.calls).toEqual([
+      `ping:${SOCK}`,
       `snapshot:${SOCK}`,
       "setTitle:sd-herdr raise default #1",
       "focusPane:w0:p1",
@@ -287,6 +291,7 @@ describe("Runner", () => {
     await w.settle();
 
     expect(w.calls).toEqual([
+      `ping:${SOCK}`,
       `snapshot:${SOCK}`,
       "setTitle:sd-herdr raise default #1",
       "raise:sd-herdr raise default #1",
