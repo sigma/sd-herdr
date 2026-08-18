@@ -3,12 +3,11 @@
  * is testable by asserting on markup and holds no decisions of its own.
  *
  * The structure is variant E from `prototypes/button-face.html` — a
- * state-coloured nameplate carrying the session name, and a body line naming
- * where the next press goes. The pip row for the other waiters is not here yet:
- * nothing computes an attention set, so there is nothing to draw pips for.
+ * state-coloured nameplate carrying the session name, a body line naming where
+ * the next press goes, and a row of tier-coloured pips for the other waiters.
  */
 
-import type { FaceDescriptor, StateColour } from "./descriptor.js";
+import type { FaceDescriptor, PipColour, StateColour } from "./descriptor.js";
 
 /** Stream Deck keys are 72×72; the prototype authored at that size, so we do too. */
 const SIZE = 72;
@@ -35,6 +34,30 @@ const PALETTE: Record<StateColour, { plate: string; plateInk: string; bodyInk: s
   dark: { plate: "#23262C", plateInk: "#666C78", bodyInk: "#767B85" },
   grey: { plate: "#33363D", plateInk: "#9AA0AA", bodyInk: "#767B85" },
 };
+
+/**
+ * A pip's fill, per tier. The same three colours the nameplate uses for the
+ * same three tiers — one agent's `unknown` is the same grey as a session the
+ * plugin cannot read, because it is the same statement about one pane.
+ */
+const PIP_FILL: Record<PipColour, string> = {
+  red: "#C62828",
+  amber: "#E8A317",
+  // The nameplate's grey *ink*, not its fill. A pip is a 4px dot on the tile's
+  // near-black ground, and the plate's `#33363D` disappears against it — an
+  // `unknown` waiter would be counted by the row and invisible on it.
+  grey: "#767B85",
+};
+
+/** The pip row's geometry, lifted from the prototype: radius, pitch, baseline. */
+const PIP_RADIUS = 4;
+const PIP_GAP = 11;
+const PIP_ELLIPSIS_GAP = 13;
+const PIP_ROW_Y = 59;
+
+/** Where the body sits with and without a pip row under it. */
+const BODY_Y = 44;
+const BODY_Y_WITH_PIPS = 38;
 
 /** Nameplate glyphs are 9px; this many fit across the 72px strip with margins. */
 const NAMEPLATE_MAX_CHARS = 13;
@@ -78,16 +101,50 @@ function textNode(content: string, x: number, y: number, size: number, fill: str
   );
 }
 
+/**
+ * The row of pips for the other waiters, centred under the body — or nothing at
+ * all when the target is the only thing waiting.
+ *
+ * The row is centred on the whole thing it draws, ellipsis included, so a tile
+ * that overflows does not look off-centre.
+ */
+function pipRow(face: FaceDescriptor): string {
+  if (face.pips.length === 0) return "";
+  const width = (face.pips.length - 1) * PIP_GAP + (face.pipOverflow ? PIP_ELLIPSIS_GAP : 0);
+  const first = SIZE / 2 - width / 2;
+  const dots = face.pips
+    .map(
+      (pip, i) =>
+        `<circle cx="${first + i * PIP_GAP}" cy="${PIP_ROW_Y}" r="${PIP_RADIUS}"` +
+        ` fill="${PIP_FILL[pip]}"/>`,
+    )
+    .join("");
+  const more = face.pipOverflow
+    ? textNode(
+        "…",
+        first + (face.pips.length - 1) * PIP_GAP + PIP_ELLIPSIS_GAP,
+        PIP_ROW_Y - 2,
+        18,
+        PALETTE[face.stateColour].bodyInk,
+      )
+    : "";
+  return dots + more;
+}
+
 /** Render a face as a complete 72×72 SVG document, ready for `setImage`. */
 export function renderFaceSvg(face: FaceDescriptor): string {
   const palette = PALETTE[face.stateColour];
+  // The body rides up to make room for the pips rather than the row appearing
+  // over it — the tile has one column of space and the two share it.
+  const bodyY = face.pips.length > 0 ? BODY_Y_WITH_PIPS : BODY_Y;
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}"` +
     ` viewBox="0 0 ${SIZE} ${SIZE}">` +
     `<rect width="${SIZE}" height="${SIZE}" fill="${GROUND}"/>` +
     `<rect width="${SIZE}" height="${NAMEPLATE_HEIGHT}" fill="${palette.plate}"/>` +
     textNode(clip(face.nameplate, NAMEPLATE_MAX_CHARS), SIZE / 2, 7, 9, palette.plateInk) +
-    textNode(face.body, SIZE / 2, 44, fitSize(face.body), palette.bodyInk) +
+    textNode(face.body, SIZE / 2, bodyY, fitSize(face.body), palette.bodyInk) +
+    pipRow(face) +
     `</svg>`
   );
 }

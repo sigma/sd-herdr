@@ -16,6 +16,16 @@
  */
 export type StateColour = "red" | "amber" | "dark" | "grey";
 
+/**
+ * A pip's colour: the tier of one agent still waiting. A strict subset of the
+ * state colours, because a pip speaks for one agent and `dark` is a statement
+ * about the whole session.
+ */
+export type PipColour = "red" | "amber" | "grey";
+
+/** How many pips the row draws before it stops counting and says `…` instead. */
+export const PIP_CAP = 4;
+
 /** What the tile renders for the current attention set. */
 export interface FaceDescriptor {
   /** The state colour, carried by the nameplate. */
@@ -24,4 +34,16 @@ export interface FaceDescriptor {
   readonly nameplate: string;
   /** The body line — where the next press will take the user. */
   readonly body: string;
+  /**
+   * The **other** waiters, tier-coloured, in priority order and already capped
+   * at `PIP_CAP`. The agent the body names never gets a pip, so the body and
+   * the pips never restate each other.
+   *
+   * There is no hollow-vs-filled axis, deliberately: a ring marking the
+   * target's same-tab sibling was considered and rejected, because it would
+   * warn about a cost the user cannot avoid.
+   */
+  readonly pips: readonly PipColour[];
+  /** Whether more waiters were cut than the row can show — drawn as a trailing `…`. */
+  readonly pipOverflow: boolean;
 }

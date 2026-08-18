@@ -278,7 +278,13 @@ describe("the staleness deadline", () => {
       { type: "snapshotFailed", at: 4000 },
       { type: "snapshotFailed", at: 5200 },
     );
-    expect(face(stopped)).toEqual({ stateColour: "grey", nameplate: "herdr", body: "" });
+    expect(face(stopped)).toEqual({
+      stateColour: "grey",
+      nameplate: "herdr",
+      body: "",
+      pips: [],
+      pipOverflow: false,
+    });
   });
 
   it("goes grey on a poll loop that wedges without ever failing", () => {
@@ -302,7 +308,13 @@ describe("the staleness deadline", () => {
 
   it("reads herdr on the plate for an unknown-only set, because grey is one state", () => {
     const { state } = drive([APPEAR, snapshotAt(2000, "unknown-only")], initial("work", SOCK));
-    expect(face(state)).toEqual({ stateColour: "grey", nameplate: "herdr", body: "" });
+    expect(face(state)).toEqual({
+      stateColour: "grey",
+      nameplate: "herdr",
+      body: "",
+      pips: [],
+      pipOverflow: false,
+    });
   });
 });
 
@@ -572,6 +584,95 @@ describe("the press cycle", () => {
     ]);
     expect(focused(effects)).not.toContain("w0:p2");
     expect(focused(effects)).toEqual(["w0:p1", "w1:p1", "w1:p1"]);
+  });
+});
+
+describe("the body", () => {
+  const pressAt = (at: number): CoreEvent => ({ type: "pressed", at });
+
+  /** The face after `count` presses against one unchanging snapshot. */
+  const stepped = (name: Parameters<typeof fixture>[0], count: number) =>
+    face(
+      drive([
+        APPEAR,
+        snapshotAt(2000, name),
+        ...Array.from({ length: count }, (_, i) => pressAt(2100 + i * 100)),
+      ]).state,
+    );
+
+  it("names where the next press goes, and changes as you step", () => {
+    // Not the top-priority agent, which never moves: focusing a blocked agent
+    // consumes nothing, so a face naming it would sit inert for a whole cycle.
+    expect([0, 1, 2, 3].map((n) => stepped("mixed-tiers", n).body)).toEqual([
+      "playpen",
+      "nix",
+      "trunk",
+      "infra",
+    ]);
+  });
+
+  it("renders a bare workspace label for one agent alone in its tab", () => {
+    expect(stepped("blocked-one", 0).body).toBe("nix");
+  });
+
+  it("adds a pane index when an attention sibling shares the tab", () => {
+    expect(stepped("split-tab", 0).body).toBe("trunk ①");
+    expect(stepped("split-tab", 1).body).toBe("trunk ③");
+  });
+
+  it("counts panes rather than agents, so agent | shell | agent reads ① and ③", () => {
+    expect(stepped("split-tab", 1).body).toBe("trunk ③");
+  });
+
+  it("leaves the label bare when only a plain shell shares the tab", () => {
+    // The lone agent of w1:t1, and — after the split tab is walked — the split
+    // tab's own survivor.
+    expect(stepped("split-tab", 2).body).toBe("nix");
+  });
+
+  it("blinks the index away when the sibling stops waiting", () => {
+    // Paying only where it is needed, working as intended: the same pane in the
+    // same three-pane tab, now the only one waiting in it.
+    expect(stepped("split-tab-lone", 0).body).toBe("trunk");
+  });
+
+  it("says nothing when there is nowhere for a press to go", () => {
+    expect(stepped("no-agents", 0).body).toBe("");
+    expect(face(initial("work", SOCK)).body).toBe("");
+  });
+
+  it("is allowed to disagree with the bar about tier", () => {
+    // A red bar over an amber-tier body is correct, not a bug: the bar is
+    // global and is the only thing left saying something is blocked somewhere,
+    // while the body follows the button. Two presses in, the cycle has walked
+    // past both blocked agents and the next press goes to a `done` one.
+    const amberTarget = stepped("mixed-tiers", 2);
+    expect(amberTarget).toMatchObject({ stateColour: "red", body: "trunk" });
+  });
+});
+
+describe("the pips", () => {
+  const pipsAfter = (name: Parameters<typeof fixture>[0]) =>
+    face(drive([APPEAR, snapshotAt(2000, name)]).state);
+
+  it("shows the other waiters, tier-coloured, in priority order", () => {
+    expect(pipsAfter("mixed-tiers").pips).toEqual(["red", "amber", "grey"]);
+  });
+
+  it("never gives the named agent a pip, so body and pips do not restate each other", () => {
+    // blocked-one has exactly one waiter, and the body names it.
+    expect(pipsAfter("blocked-one")).toMatchObject({ body: "nix", pips: [] });
+  });
+
+  it("stops counting past the cap and says … instead", () => {
+    const face = pipsAfter("many-waiters");
+    expect(face.pips).toEqual(["red", "red", "red", "red"]);
+    expect(face.pipOverflow).toBe(true);
+  });
+
+  it("has no pips when nothing is waiting, and none while grey", () => {
+    expect(pipsAfter("no-agents")).toMatchObject({ pips: [], pipOverflow: false });
+    expect(pipsAfter("unknown-only")).toMatchObject({ pips: [], pipOverflow: false });
   });
 });
 

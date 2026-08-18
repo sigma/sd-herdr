@@ -1,0 +1,227 @@
+{
+  "provenance": {
+    "kind": "derived",
+    "derivedFrom": "mixed-tiers.json",
+    "note": "HAND-DERIVED, not captured. Six agents blocked at once is not a shape a live session offers on demand, and it exists here for one reason: it is the smallest set that overflows the pip row.",
+    "shape": "Six blocked agents, one per workspace, in ascending `state_change_seq` so priority order is the array order. One is named by the body, leaving five others for a row that draws at most four — the … case. Trimmed to the fields this scenario exercises."
+  },
+  "snapshot": {
+    "version": "0.8.0",
+    "protocol": 19,
+    "focused_workspace_id": "w0",
+    "focused_tab_id": "w0:t1",
+    "focused_pane_id": "w0:p1",
+    "workspaces": [
+      {
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "trunk",
+        "focused": true,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w0:t1",
+        "agent_status": "blocked"
+      },
+      {
+        "workspace_id": "w1",
+        "number": 2,
+        "label": "nix",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w1:t1",
+        "agent_status": "blocked"
+      },
+      {
+        "workspace_id": "w2",
+        "number": 3,
+        "label": "infra",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w2:t1",
+        "agent_status": "blocked"
+      },
+      {
+        "workspace_id": "w3",
+        "number": 4,
+        "label": "playpen",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w3:t1",
+        "agent_status": "blocked"
+      },
+      {
+        "workspace_id": "w4",
+        "number": 5,
+        "label": "IaC",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w4:t1",
+        "agent_status": "blocked"
+      },
+      {
+        "workspace_id": "w5",
+        "number": 6,
+        "label": "docs",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w5:t1",
+        "agent_status": "blocked"
+      }
+    ],
+    "tabs": [
+      {
+        "tab_id": "w0:t1",
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "1",
+        "focused": true,
+        "pane_count": 1,
+        "agent_status": "blocked"
+      },
+      {
+        "tab_id": "w1:t1",
+        "workspace_id": "w1",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "blocked"
+      },
+      {
+        "tab_id": "w2:t1",
+        "workspace_id": "w2",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "blocked"
+      },
+      {
+        "tab_id": "w3:t1",
+        "workspace_id": "w3",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "blocked"
+      },
+      {
+        "tab_id": "w4:t1",
+        "workspace_id": "w4",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "blocked"
+      },
+      {
+        "tab_id": "w5:t1",
+        "workspace_id": "w5",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "blocked"
+      }
+    ],
+    "panes": [],
+    "layouts": [],
+    "agents": [
+      {
+        "terminal_id": "term_eee0000000001",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "blocked",
+        "workspace_id": "w0",
+        "tab_id": "w0:t1",
+        "pane_id": "w0:p1",
+        "focused": true,
+        "state_change_seq": 100,
+        "cwd": "/Users/dev/src/trunk",
+        "foreground_cwd": "/Users/dev/src/trunk",
+        "revision": 10
+      },
+      {
+        "terminal_id": "term_eee0000000002",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "blocked",
+        "workspace_id": "w1",
+        "tab_id": "w1:t1",
+        "pane_id": "w1:p1",
+        "focused": false,
+        "state_change_seq": 110,
+        "cwd": "/Users/dev/src/nix",
+        "foreground_cwd": "/Users/dev/src/nix",
+        "revision": 11
+      },
+      {
+        "terminal_id": "term_eee0000000003",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "blocked",
+        "workspace_id": "w2",
+        "tab_id": "w2:t1",
+        "pane_id": "w2:p1",
+        "focused": false,
+        "state_change_seq": 120,
+        "cwd": "/Users/dev/src/infra",
+        "foreground_cwd": "/Users/dev/src/infra",
+        "revision": 12
+      },
+      {
+        "terminal_id": "term_eee0000000004",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "blocked",
+        "workspace_id": "w3",
+        "tab_id": "w3:t1",
+        "pane_id": "w3:p1",
+        "focused": false,
+        "state_change_seq": 130,
+        "cwd": "/Users/dev/src/playpen",
+        "foreground_cwd": "/Users/dev/src/playpen",
+        "revision": 13
+      },
+      {
+        "terminal_id": "term_eee0000000005",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "blocked",
+        "workspace_id": "w4",
+        "tab_id": "w4:t1",
+        "pane_id": "w4:p1",
+        "focused": false,
+        "state_change_seq": 140,
+        "cwd": "/Users/dev/src/IaC",
+        "foreground_cwd": "/Users/dev/src/IaC",
+        "revision": 14
+      },
+      {
+        "terminal_id": "term_eee0000000006",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "blocked",
+        "workspace_id": "w5",
+        "tab_id": "w5:t1",
+        "pane_id": "w5:p1",
+        "focused": false,
+        "state_change_seq": 150,
+        "cwd": "/Users/dev/src/docs",
+        "foreground_cwd": "/Users/dev/src/docs",
+        "revision": 15
+      }
+    ]
+  }
+}

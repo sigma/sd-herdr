@@ -14,13 +14,18 @@
  *   should happen and in what order; the adapters obey. Nothing here opens a
  *   socket, spawns a process, or touches the Stream Deck SDK.
  *
- * Scope, for now, is the attention model, the bar colour and the press cycle.
- * The body and the server-restart reset arrive in later tickets against this
- * same seam.
+ * Scope is the attention model, the bar colour, the press cycle and the face
+ * the three of them add up to.
  */
-import type { FaceDescriptor, StateColour } from "../face/descriptor.js";
+import {
+  type FaceDescriptor,
+  PIP_CAP,
+  type PipColour,
+  type StateColour,
+} from "../face/descriptor.js";
 import type { Snapshot } from "../herdr/snapshot.js";
 import { type AttentionAgent, type AttentionStatus, attentionSet } from "./attention.js";
+import { bodyFor } from "./body.js";
 
 /**
  * What each tier of the attention set says the bar should be.
@@ -29,7 +34,7 @@ import { type AttentionAgent, type AttentionStatus, attentionSet } from "./atten
  * cannot tell what they are doing" is the same thing to a user as "I cannot see
  * the session", and rendering it as dark would be rendering it as all-clear.
  */
-const TIER_COLOUR: Record<AttentionStatus, StateColour> = {
+const TIER_COLOUR: Record<AttentionStatus, PipColour> = {
   blocked: "red",
   done: "amber",
   unknown: "grey",
@@ -387,16 +392,24 @@ export function face(state: CoreState): FaceDescriptor {
   // deliberately *one* state: a plate that varied by cause would split on the
   // face what the colour joins, and the causes are not distinctions the user
   // can act on differently anyway.
-  if (colour === "grey") return { stateColour: "grey", nameplate: "herdr", body: "" };
+  if (colour === "grey")
+    return { stateColour: "grey", nameplate: "herdr", body: "", pips: [], pipOverflow: false };
+
+  // The body names where the *next press* goes; the pips are everyone else
+  // still waiting. Both are read off the same ordering the press cycle walks,
+  // so the tile cannot promise a press the cycle would not make.
+  const set = ordered(state);
+  const target = pressTarget(state);
+  const others = set.filter((agent) => agent.paneId !== target);
 
   return {
     stateColour: colour,
     // `default` is herdr's placeholder rather than a name the user chose, so
     // the slot buys product identity instead.
     nameplate: state.sessionName === "default" ? "herdr" : state.sessionName,
-    // The body names the next press target, and there is no press cycle yet.
-    // #24 fills this in against this same seam.
-    body: "",
+    body: state.snapshot === null ? "" : bodyFor(state.snapshot, set, target),
+    pips: others.slice(0, PIP_CAP).map((agent) => TIER_COLOUR[agent.status]),
+    pipOverflow: others.length > PIP_CAP,
   };
 }
 
