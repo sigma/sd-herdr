@@ -22,6 +22,7 @@ describe("renderFaceSvg", () => {
 
   it("colours the nameplate per state colour", () => {
     expect(renderFaceSvg(face({ stateColour: "red" }))).toContain("#C62828");
+    expect(renderFaceSvg(face({ stateColour: "green" }))).toContain("#2E7D32");
     expect(renderFaceSvg(face({ stateColour: "amber" }))).toContain("#E8A317");
     expect(renderFaceSvg(face({ stateColour: "grey" }))).toContain("#33363D");
     expect(renderFaceSvg(face({ stateColour: "dark" }))).toContain("#23262C");
@@ -48,6 +49,17 @@ describe("renderFaceSvg", () => {
     // in `#33363D` vanishes against the tile's ground.
     expect(svg).toContain('fill="#767B85"');
     expect(svg).not.toContain('<circle cx="36" cy="59" r="4" fill="#33363D"/>');
+  });
+
+  it("sits the nameplate text below the strip's centre, where it reads level", () => {
+    // The plate is 13px tall; its geometric centre reads high on the device.
+    expect(renderFaceSvg(face({ nameplate: "work" }))).toContain('y="10"');
+  });
+
+  it("brightens the green pip, which the plate's green would lose to the ground", () => {
+    const svg = renderFaceSvg(face({ pips: ["green"] }));
+    expect(svg).toContain('fill="#43A047"');
+    expect(svg).not.toContain('<circle cx="36" cy="59" r="4" fill="#2E7D32"/>');
   });
 
   it("draws no pip row when the named target is the only thing waiting", () => {

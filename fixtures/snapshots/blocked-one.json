@@ -3,7 +3,7 @@
     "kind": "derived",
     "derivedFrom": "live-session.json",
     "note": "HAND-DERIVED, not captured. A live session will not go `blocked` on demand, so the one status the whole button exists for cannot be recorded from a real installation. Field names, id shapes and value ranges are copied from live-session.json; the statuses are invented.",
-    "shape": "One blocked agent alongside one working agent. The minimal red case: the bar is red, and `working` is not attention."
+    "shape": "One blocked agent alongside one working agent. The minimal red case: the bar is red, and the `working` agent sits last in the cycle behind it."
   },
   "snapshot": {
     "version": "0.8.0",

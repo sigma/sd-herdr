@@ -2,8 +2,8 @@
   "provenance": {
     "kind": "derived",
     "derivedFrom": "split-tab.json",
-    "note": "HAND-DERIVED, not captured. `split-tab.json` a moment later, with the agent in pane w0:p7 back at work. Nothing else moved — the point is that the tab now holds exactly one waiting agent.",
-    "shape": "The split tab with only ONE attention pane left in it: w0:p2 is still blocked, w0:p7 is `working` and so out of the attention set, and w0:p5 is the same plain shell. The blink case — the body drops its pane index and goes back to a bare workspace label, because a shell alongside the target was never what made the label ambiguous."
+    "note": "HAND-DERIVED, not captured. `split-tab.json` a moment later, with the agent in pane w0:p7 answered and gone `idle`. Nothing else moved — the point is that the tab now holds exactly one attention pane.",
+    "shape": "The split tab with only ONE attention pane left in it: w0:p2 is still blocked, w0:p7 is `idle` — the one status that is not attention, so the only way a sibling can leave the set — and w0:p5 is the same plain shell. The blink case — the body drops its pane index and goes back to a bare workspace label, because a shell alongside the target was never what made the label ambiguous."
   },
   "snapshot": {
     "version": "0.8.0",
@@ -65,7 +65,7 @@
         "agent": "codex",
         "terminal_title": "codex",
         "terminal_title_stripped": "codex",
-        "agent_status": "working",
+        "agent_status": "idle",
         "revision": 44
       },
       {
@@ -215,7 +215,7 @@
         "agent": "codex",
         "terminal_title": "codex",
         "terminal_title_stripped": "codex",
-        "agent_status": "working",
+        "agent_status": "idle",
         "workspace_id": "w0",
         "tab_id": "w0:t1",
         "pane_id": "w0:p7",

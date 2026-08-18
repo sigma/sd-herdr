@@ -8,9 +8,9 @@ The design is specified in [#17](https://github.com/sigma/sd-herdr/issues/17); t
 vocabulary it is argued in is [`CONTEXT.md`](CONTEXT.md).
 
 **Status: it watches, and it can be pressed.** The tile follows the `default` herdr
-session — red while any agent is blocked, amber when only `done` agents are waiting, dark
-when nothing is, and **grey whenever it cannot see the session**: an unreachable socket, a
-stopped session, a snapshot older than 3 s, or an attention set of nothing but `unknown`.
+session — red while any agent is blocked, green when only `done` agents are waiting, amber
+when the rest are still working, dark when nothing is, and **grey whenever it cannot see
+the session**: an unreachable socket, a stopped session, a snapshot older than 3 s, or an attention set of nothing but `unknown`.
 Grey is one state with one plate (`herdr`) however it was reached, and it is never
 all-clear. Failures back off to a 5 s ceiling and recover on their own.
 
@@ -92,8 +92,8 @@ Verified on Stream Deck app 7.4.2 / macOS 26.5.2:
 - `just link` — the plugin links, and against a connected Stream Deck XL the plugin
   process starts and completes SDK registration (`just logs` shows the
   `RegistrationParameters` handshake).
-- The four state colours (`red`, `amber`, `dark`, `grey`) rasterize as expected at 72×72
-  — checked by rendering the SVGs offline, *not* on the device.
+- The five state colours (`red`, `green`, `amber`, `dark`, `grey`) rasterize as expected
+  at 72×72 — checked by rendering the SVGs offline, *not* on the device.
 - The computed socket path for `default` matches what a live `herdr session list --json`
   reports, and the plugin connects to it from inside the Stream Deck process — with no
   `herdr` binary involved, which matters because `herdr` is *not* on a plugin's `PATH`

@@ -44,7 +44,9 @@ describe("bodyFor", () => {
   });
 
   it("is empty for a pane that is not in the attention set", () => {
-    expect(bodyOf("blocked-one", "w1:p1")).toBe("");
+    // `idle` is the one status attention leaves out — everything else is a
+    // pane the cycle can walk to.
+    expect(bodyOf("mixed-tiers", "w4:p1")).toBe("");
     expect(bodyOf("blocked-one", "nonesuch")).toBe("");
   });
 

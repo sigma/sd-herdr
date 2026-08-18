@@ -3,7 +3,7 @@
     "kind": "derived",
     "derivedFrom": "live-session.json",
     "note": "HAND-DERIVED, not captured. `done` is not a state an agent can be in — herdr derives it from (idle, seen = false) — so it exists only in the outbound direction and cannot be captured by asking a session to produce it. Trimmed to the fields this scenario exercises; see blocked-one.json for a complete-shape derived snapshot.",
-    "shape": "Two done agents and nothing blocked. The amber case: attention is real, but nobody is waiting on input."
+    "shape": "Two done agents and nothing blocked. The green case: attention is real, but nobody is waiting on input."
   },
   "snapshot": {
     "version": "0.8.0",

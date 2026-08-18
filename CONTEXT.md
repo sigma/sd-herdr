@@ -40,7 +40,7 @@ process on a fixed tick, **never from pane output**, so a silent agent returns a
 a noisy one. It comes back with a *seeded* `Idle` state, held for a 3 s startup grace
 window before the screen is read, which is why agents reappear at ~0.4 s but correct
 statuses only at ~3.7 s. The seed reports `idle` and never `done`, so the tile can only
-under-report during the window, never flash a false red or amber. One casualty: a `done`
+under-report during the window, never flash a false red or green. One casualty: a `done`
 agent returns as plain `idle` and stays there — the `seen` flag is gone and nothing on
 screen recovers it.
 
@@ -52,14 +52,17 @@ press reveals.
 ## The attention model
 
 **Attention set**:
-The agents the button is speaking for: `blocked` ∪ `done` ∪ (`unknown` with an `agent`
-field). `working` and `idle` are not attention — `idle` means "already looked at, no
-follow-up".
+The agents the button is speaking for: `blocked` ∪ `done` ∪ `working` ∪ (`unknown` with
+an `agent` field). `idle` is the only status left out — it means "already looked at, no
+follow-up", so there is nothing to walk to. A `working` agent is owed no answer, but it
+is somewhere to *check on*, and the cycle reaches it once everything more urgent is
+spent.
 _Avoid_: queue, backlog, alerts, notifications.
 
 **Priority order**:
-The total order over the attention set: tier `blocked` → `done` → `unknown`, then
-lowest `state_change_seq` first within a tier, so the longest-waiting agent wins.
+The total order over the attention set: tier `blocked` → `done` → `working` →
+`unknown`, then lowest `state_change_seq` first within a tier, so the longest-waiting
+agent wins.
 
 **Top-priority agent**:
 The head of the attention set under priority order, ignoring the visited set. Stable —
@@ -68,9 +71,10 @@ survives only as the thing the state colour speaks for: focusing a `blocked` age
 consumes nothing, so this one can sit at the head untouched for a whole cycle.
 
 **Tier**:
-One rank of the priority order. The `blocked` and `done` tiers differ mechanically, not
-just in urgency: focusing a `done` agent consumes it, focusing a `blocked` agent
-changes nothing. Ranks of the *raise ladder* are **rungs**, never tiers.
+One rank of the priority order. The tiers differ mechanically, not just in urgency:
+focusing a `done` agent consumes it, focusing a `blocked` agent changes nothing, and a
+`working` agent is not waiting on the user at all. Ranks of the *raise ladder* are
+**rungs**, never tiers.
 
 ## The button
 
@@ -216,13 +220,16 @@ all — and the only one the plugin can take without an Automation grant of its 
 
 **Face**:
 What the tile renders for the current attention set: a state colour (red = any
-`blocked`, amber = `done` only, dark = clear, grey = cannot see the session), a session
+`blocked`, green = `done` and nothing blocked, amber = `working` only, dark = every agent
+`idle` or none at all, grey = cannot see the session), a session
 nameplate, a label for the *next press target*, and tier-coloured dots for the
-other waiters. The label is the target's workspace, plus a *pane index* when an attention
+other waiters. The colours read as a traffic light — red stopped, amber running, green
+arrived — so green is the finished tier and amber the one still in flight. The label is
+the target's workspace, plus a *pane index* when an attention
 sibling shares its tab ([#16](https://github.com/sigma/sd-herdr/issues/16)). The three
 speak different axes and are allowed to disagree — colour is
 the whole session, the label is where the next press goes, the dots are everyone else
-still waiting. In particular a red bar over an amber-tier label is correct, not a bug
+still waiting. In particular a red bar over a green-tier label is correct, not a bug
 ([#12](https://github.com/sigma/sd-herdr/issues/12)).
 
 **Pips**:

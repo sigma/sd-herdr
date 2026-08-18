@@ -136,7 +136,7 @@ describe("SessionHub", () => {
 
     expect(hub.loops).toBe(2);
     expect(home.painted.at(-1)?.stateColour).toBe("red");
-    expect(work.painted.at(-1)?.stateColour).toBe("amber");
+    expect(work.painted.at(-1)?.stateColour).toBe("green");
   });
 
   it("keeps polling for the buttons that are left when one goes away", async () => {

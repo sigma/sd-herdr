@@ -34,13 +34,13 @@ Derived fixtures carry only the fields their scenario exercises, and say so.
 | File | Kind | What it is for |
 |---|---|---|
 | `snapshots/live-session.json` | captured | The real wire shape: 8 workspaces, 16 panes, 7 agents, verbatim. |
-| `snapshots/blocked-one.json` | derived | One `blocked` beside one `working` — the minimal red case. |
-| `snapshots/done-only.json` | derived | Two `done`, nothing blocked — the amber case. |
+| `snapshots/blocked-one.json` | derived | One `blocked` beside one `working` — the minimal red case, with the working agent last in the cycle. |
+| `snapshots/done-only.json` | derived | Two `done`, nothing blocked — the green case. |
 | `snapshots/mixed-tiers.json` | derived | All tiers, with sequence numbers fighting tier order. |
 | `snapshots/unknown-only.json` | derived | Attention made of `unknown`, plus one entry with no `agent` field. |
 | `snapshots/no-agents.json` | derived | A live session with no agents — the honest dark face. |
 | `snapshots/split-tab.json` | derived | `agent \| shell \| agent` in one tab, listed out of geometric order. |
-| `snapshots/split-tab-lone.json` | derived | `split-tab.json` with the second agent back at work — the body's index blinking away. |
+| `snapshots/split-tab-lone.json` | derived | `split-tab.json` with the second agent answered and `idle` — the body's index blinking away. |
 | `snapshots/many-waiters.json` | derived | Six blocked agents: the smallest set that overflows the pip row. |
 | `snapshots/done-pair.json` | derived | Two `done` agents tiled in one tab, plus a third alone — the tab-scoped consumption case. |
 | `snapshots/done-pair-consumed.json` | derived | `done-pair.json` one poll after a press: the whole tab came back `idle`. |

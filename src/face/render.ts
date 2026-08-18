@@ -29,6 +29,7 @@ const FONT = "ui-sans-serif, -apple-system, Helvetica, Arial, sans-serif";
 const PALETTE: Record<StateColour, { plate: string; plateInk: string; bodyInk: string }> = {
   // Amber flips the plate ink dark, the only pairing where white loses contrast.
   red: { plate: "#C62828", plateInk: "rgba(255,255,255,.92)", bodyInk: "#FFFFFF" },
+  green: { plate: "#2E7D32", plateInk: "rgba(255,255,255,.92)", bodyInk: "#FFFFFF" },
   amber: { plate: "#E8A317", plateInk: "#2A1E00", bodyInk: "#FFFFFF" },
   // Nothing waiting and nothing visible both dim the body — there is no target.
   dark: { plate: "#23262C", plateInk: "#666C78", bodyInk: "#767B85" },
@@ -42,6 +43,9 @@ const PALETTE: Record<StateColour, { plate: string; plateInk: string; bodyInk: s
  */
 const PIP_FILL: Record<PipColour, string> = {
   red: "#C62828",
+  // A shade up from the plate's green: the same reason the grey pip differs,
+  // one step milder — `#2E7D32` reads nearly black at 4px on this ground.
+  green: "#43A047",
   amber: "#E8A317",
   // The nameplate's grey *ink*, not its fill. A pip is a 4px dot on the tile's
   // near-black ground, and the plate's `#33363D` disappears against it — an
@@ -61,6 +65,13 @@ const BODY_Y_WITH_PIPS = 38;
 
 /** Nameplate glyphs are 9px; this many fit across the 72px strip with margins. */
 const NAMEPLATE_MAX_CHARS = 13;
+
+/**
+ * The nameplate text's centre line — 3px below the strip's own centre. Sitting
+ * it on the geometric centre reads high on the device, because the glyphs the
+ * plate carries are mostly x-height with no descenders to balance them.
+ */
+const NAMEPLATE_TEXT_Y = 10;
 
 /** The body's type size ceiling, and the width it is fitted into. */
 const BODY_MAX_SIZE = 22;
@@ -142,7 +153,13 @@ export function renderFaceSvg(face: FaceDescriptor): string {
     ` viewBox="0 0 ${SIZE} ${SIZE}">` +
     `<rect width="${SIZE}" height="${SIZE}" fill="${GROUND}"/>` +
     `<rect width="${SIZE}" height="${NAMEPLATE_HEIGHT}" fill="${palette.plate}"/>` +
-    textNode(clip(face.nameplate, NAMEPLATE_MAX_CHARS), SIZE / 2, 7, 9, palette.plateInk) +
+    textNode(
+      clip(face.nameplate, NAMEPLATE_MAX_CHARS),
+      SIZE / 2,
+      NAMEPLATE_TEXT_Y,
+      9,
+      palette.plateInk,
+    ) +
     textNode(face.body, SIZE / 2, bodyY, fitSize(face.body), palette.bodyInk) +
     pipRow(face) +
     `</svg>`

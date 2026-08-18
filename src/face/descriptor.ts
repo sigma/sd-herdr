@@ -14,14 +14,14 @@
  * snapshot, settling, an `unknown`-only attention set — and is never rendered as
  * all-clear.
  */
-export type StateColour = "red" | "amber" | "dark" | "grey";
+export type StateColour = "red" | "green" | "amber" | "dark" | "grey";
 
 /**
  * A pip's colour: the tier of one agent still waiting. A strict subset of the
  * state colours, because a pip speaks for one agent and `dark` is a statement
  * about the whole session.
  */
-export type PipColour = "red" | "amber" | "grey";
+export type PipColour = "red" | "green" | "amber" | "grey";
 
 /** How many pips the row draws before it stops counting and says `…` instead. */
 export const PIP_CAP = 4;

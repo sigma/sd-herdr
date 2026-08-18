@@ -32,13 +32,19 @@ import { isRestart, terminalsOf } from "./lifetime.js";
 /**
  * What each tier of the attention set says the bar should be.
  *
+ * Green is `done` and amber is `working`, not the other way round: amber is the
+ * colour of something still in flight, and a finished agent has nothing left to
+ * wait for. So the two urgent tiers read as a traffic light — red stopped,
+ * amber running, green arrived.
+ *
  * `unknown` is grey rather than a colour of its own: "there are agents and I
  * cannot tell what they are doing" is the same thing to a user as "I cannot see
  * the session", and rendering it as dark would be rendering it as all-clear.
  */
 const TIER_COLOUR: Record<AttentionStatus, PipColour> = {
   blocked: "red",
-  done: "amber",
+  done: "green",
+  working: "amber",
   unknown: "grey",
 };
 

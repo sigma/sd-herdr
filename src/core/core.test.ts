@@ -48,16 +48,26 @@ const snapshotAt = (at: number, name: Parameters<typeof fixture>[0]): CoreEvent 
 });
 
 describe("attentionSet", () => {
-  it("is blocked ∪ done ∪ unknown-with-an-agent, and nothing else", () => {
+  it("is blocked ∪ done ∪ working ∪ unknown-with-an-agent, and nothing else", () => {
     const set = attentionSet(fixture("mixed-tiers").agents);
     expect(set.map((a) => a.status)).toEqual(["blocked", "blocked", "done", "unknown"]);
   });
 
-  it("excludes working and idle, however long they have waited", () => {
+  it("excludes idle, however long it has waited", () => {
     // The idle agent in this fixture has the lowest seq of all — the longest
     // wait — and is still not attention: idle means "already looked at".
     const set = attentionSet(fixture("mixed-tiers").agents);
     expect(set.map((a) => a.paneId)).not.toContain("w4:p1");
+  });
+
+  it("includes working, ranked below done", () => {
+    // The cycle walks to a working agent to check on it; it is simply the
+    // least urgent thing worth a press.
+    const set = attentionSet(fixture("blocked-one").agents);
+    expect(set.map((a) => [a.paneId, a.status])).toEqual([
+      ["w0:p1", "blocked"],
+      ["w1:p1", "working"],
+    ]);
   });
 
   it("orders by tier first, so a fresh blocked agent outranks an older done one", () => {
@@ -79,8 +89,8 @@ describe("attentionSet", () => {
     expect(set.map((a) => a.paneId)).toEqual(["w0:p1"]);
   });
 
-  it("is empty for a session whose agents are all idle or working", () => {
-    expect(attentionSet(fixture("live-session").agents)).toEqual([]);
+  it("holds only the working agent of a session that is otherwise all idle", () => {
+    expect(attentionSet(fixture("live-session").agents).map((a) => a.paneId)).toEqual(["w15:p1"]);
   });
 
   it("is empty for a session with no agents", () => {
@@ -107,12 +117,16 @@ describe("face", () => {
     expect(faceAfter("unknown-only").stateColour).toBe("grey");
   });
 
-  it("is amber when the attention set is done only", () => {
-    expect(faceAfter("done-only").stateColour).toBe("amber");
+  it("is green when the attention set is done only", () => {
+    expect(faceAfter("done-only").stateColour).toBe("green");
+  });
+
+  it("is amber when the most urgent thing is an agent still working", () => {
+    expect(faceAfter("live-session").stateColour).toBe("amber");
   });
 
   it("is dark when a visible session has nothing waiting", () => {
-    expect(faceAfter("live-session").stateColour).toBe("dark");
+    // Only `idle` agents, or none at all: the two ways a session can be clear.
     expect(faceAfter("no-agents").stateColour).toBe("dark");
   });
 
@@ -647,12 +661,12 @@ describe("the body", () => {
   });
 
   it("is allowed to disagree with the bar about tier", () => {
-    // A red bar over an amber-tier body is correct, not a bug: the bar is
+    // A red bar over a green-tier body is correct, not a bug: the bar is
     // global and is the only thing left saying something is blocked somewhere,
     // while the body follows the button. Two presses in, the cycle has walked
     // past both blocked agents and the next press goes to a `done` one.
-    const amberTarget = stepped("mixed-tiers", 2);
-    expect(amberTarget).toMatchObject({ stateColour: "red", body: "trunk" });
+    const greenTarget = stepped("mixed-tiers", 2);
+    expect(greenTarget).toMatchObject({ stateColour: "red", body: "trunk" });
   });
 });
 
@@ -661,12 +675,13 @@ describe("the pips", () => {
     face(drive([APPEAR, snapshotAt(2000, name)]).state);
 
   it("shows the other waiters, tier-coloured, in priority order", () => {
-    expect(pipsAfter("mixed-tiers").pips).toEqual(["red", "amber", "grey"]);
+    expect(pipsAfter("mixed-tiers").pips).toEqual(["red", "green", "grey"]);
   });
 
   it("never gives the named agent a pip, so body and pips do not restate each other", () => {
-    // blocked-one has exactly one waiter, and the body names it.
-    expect(pipsAfter("blocked-one")).toMatchObject({ body: "nix", pips: [] });
+    // blocked-one holds two waiters: the blocked one the body names, and a
+    // working one. Only the second gets a dot — there is no red pip.
+    expect(pipsAfter("blocked-one")).toMatchObject({ body: "nix", pips: ["amber"] });
   });
 
   it("stops counting past the cap and says … instead", () => {
