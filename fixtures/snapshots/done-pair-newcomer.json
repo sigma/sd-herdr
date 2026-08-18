@@ -1,0 +1,140 @@
+{
+  "provenance": {
+    "kind": "derived",
+    "derivedFrom": "done-pair.json",
+    "note": "HAND-DERIVED, not captured. `done-pair.json` with a fourth agent that arrived mid-cycle — a membership change that must not reset the press cycle. Its `state_change_seq` is the highest of the four, so priority order puts it last and a press that returns to the top is visibly distinguishable from one that carries on. Trimmed to the fields this scenario exercises.",
+    "shape": "The three agents of `done-pair.json`, plus a newly `done` agent alone in a third workspace."
+  },
+  "snapshot": {
+    "version": "0.8.0",
+    "protocol": 19,
+    "focused_workspace_id": "w0",
+    "focused_tab_id": "w0:t1",
+    "focused_pane_id": "w0:p1",
+    "workspaces": [
+      {
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "trunk",
+        "focused": true,
+        "pane_count": 2,
+        "tab_count": 1,
+        "active_tab_id": "w0:t1",
+        "agent_status": "done"
+      },
+      {
+        "workspace_id": "w1",
+        "number": 2,
+        "label": "nix",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w1:t1",
+        "agent_status": "done"
+      },
+      {
+        "workspace_id": "w2",
+        "number": 3,
+        "label": "docs",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w2:t1",
+        "agent_status": "done"
+      }
+    ],
+    "tabs": [
+      {
+        "tab_id": "w0:t1",
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "1",
+        "focused": true,
+        "pane_count": 2,
+        "agent_status": "done"
+      },
+      {
+        "tab_id": "w1:t1",
+        "workspace_id": "w1",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "done"
+      },
+      {
+        "tab_id": "w2:t1",
+        "workspace_id": "w2",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "done"
+      }
+    ],
+    "panes": [],
+    "layouts": [],
+    "agents": [
+      {
+        "terminal_id": "term_ddd0000000001",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "done",
+        "workspace_id": "w0",
+        "tab_id": "w0:t1",
+        "pane_id": "w0:p1",
+        "focused": true,
+        "state_change_seq": 100,
+        "cwd": "/Users/dev/src/trunk",
+        "foreground_cwd": "/Users/dev/src/trunk",
+        "revision": 12
+      },
+      {
+        "terminal_id": "term_ddd0000000002",
+        "agent": "codex",
+        "terminal_title": "codex",
+        "terminal_title_stripped": "codex",
+        "agent_status": "done",
+        "workspace_id": "w0",
+        "tab_id": "w0:t1",
+        "pane_id": "w0:p2",
+        "focused": false,
+        "state_change_seq": 200,
+        "cwd": "/Users/dev/src/trunk",
+        "foreground_cwd": "/Users/dev/src/trunk",
+        "revision": 18
+      },
+      {
+        "terminal_id": "term_ddd0000000003",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "done",
+        "workspace_id": "w1",
+        "tab_id": "w1:t1",
+        "pane_id": "w1:p1",
+        "focused": false,
+        "state_change_seq": 300,
+        "cwd": "/Users/dev/.config/nix",
+        "foreground_cwd": "/Users/dev/.config/nix",
+        "revision": 7
+      },
+      {
+        "terminal_id": "term_ddd0000000004",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "done",
+        "workspace_id": "w2",
+        "tab_id": "w2:t1",
+        "pane_id": "w2:p1",
+        "focused": false,
+        "state_change_seq": 400,
+        "cwd": "/Users/dev/src/docs",
+        "foreground_cwd": "/Users/dev/src/docs",
+        "revision": 3
+      }
+    ]
+  }
+}

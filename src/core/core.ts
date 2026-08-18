@@ -14,13 +14,13 @@
  *   should happen and in what order; the adapters obey. Nothing here opens a
  *   socket, spawns a process, or touches the Stream Deck SDK.
  *
- * Scope, for now, is the attention model and the bar colour. The body, the
- * press cycle and the full grey policy arrive in later tickets against this
+ * Scope, for now, is the attention model, the bar colour and the press cycle.
+ * The body and the server-restart reset arrive in later tickets against this
  * same seam.
  */
 import type { FaceDescriptor, StateColour } from "../face/descriptor.js";
 import type { Snapshot } from "../herdr/snapshot.js";
-import { type AttentionStatus, attentionSet } from "./attention.js";
+import { type AttentionAgent, type AttentionStatus, attentionSet } from "./attention.js";
 
 /**
  * What each tier of the attention set says the bar should be.
@@ -85,9 +85,9 @@ export type CoreEvent =
    * herdr answers `pane_not_found` for a dead id, a malformed one and one that
    * never existed — so the core does not pretend to tell them apart.
    *
-   * Both outcomes provoke the same effect today, and the flag is still carried
-   * rather than dropped: the visited set (#23) records where a press *took* the
-   * user, and a focus that never landed took them nowhere.
+   * Both outcomes provoke the same effect, and the flag is still carried rather
+   * than dropped: the visited set records where a press *took* the user, and a
+   * focus that never landed took them nowhere.
    */
   | { readonly type: "focusResult"; readonly at: number; readonly ok: boolean };
 
@@ -125,9 +125,25 @@ export interface CoreState {
   readonly failures: number;
   /** How many presses this button has served. Only the nonce reads it. */
   readonly presses: number;
+  /**
+   * The **pane**-keyed record of which attention panes this cycle has already
+   * shown. Pane-keyed rather than tab-keyed because focus is: a tab-keyed set
+   * would mark a tiled sibling visited on the press that reached its
+   * neighbour, and leave it unreachable by button.
+   */
+  readonly visited: ReadonlySet<string>;
+  /**
+   * The pane the press in flight aimed at, held until its focus reports back.
+   * A focus that never landed took the user nowhere, so the visit is taken
+   * back rather than left to cost the cycle a step.
+   */
+  readonly aimedAt: string | null;
   /** When the last event happened. The core's only notion of time. */
   readonly at: number;
 }
+
+/** One shared empty set, so an untouched cycle allocates nothing. */
+const NO_PANES: ReadonlySet<string> = new Set();
 
 /** A core that has not seen anything yet. */
 export function initial(sessionName: string, socketPath: string): CoreState {
@@ -139,8 +155,38 @@ export function initial(sessionName: string, socketPath: string): CoreState {
     snapshotAt: 0,
     failures: 0,
     presses: 0,
+    visited: NO_PANES,
+    aimedAt: null,
     at: 0,
   };
+}
+
+/**
+ * The visited set, brought back into line with the attention set: panes that
+ * have left it are **pruned**, and a set that now covers everything **wraps**.
+ *
+ * Pruning rather than resetting is the load-bearing detail. An earlier design
+ * reset the whole set whenever membership changed, and that rule was the sole
+ * cause of `done`-tier starvation — it walked the user back through agents they
+ * had just answered every time anything else arrived. It bought nothing a prune
+ * does not: a new agent is reachable because it is not in the set.
+ *
+ * The wrap is settled *here*, on the way in, rather than being discovered by a
+ * press that then finds nothing to aim at. So a full set never survives to be
+ * seen, and no press is ever spent on the wrap itself.
+ */
+function settle(
+  visited: ReadonlySet<string>,
+  ordered: readonly AttentionAgent[],
+): ReadonlySet<string> {
+  const live = new Set(ordered.map((agent) => agent.paneId));
+  const pruned = new Set([...visited].filter((paneId) => live.has(paneId)));
+  return pruned.size === live.size ? NO_PANES : pruned;
+}
+
+/** The attention set of the snapshot in hand, in priority order. */
+function ordered(state: CoreState): readonly AttentionAgent[] {
+  return state.snapshot === null ? [] : attentionSet(state.snapshot.agents);
 }
 
 /** Ask for a snapshot — but only while anyone is looking. */
@@ -185,14 +231,25 @@ export function reduce(
     }
 
     case "disappeared":
-      return { state: { ...state, visible: false, at }, effects: [] };
+      // One of the cycle's three resets — the others are the wrap and a
+      // detected server restart (#26). The visited set is in-memory only and is
+      // never persisted: it is a record of one sitting at the keyboard, and
+      // restoring it would leave the button starting mid-cycle for reasons the
+      // user cannot see.
+      return {
+        state: { ...state, visible: false, visited: NO_PANES, aimedAt: null, at },
+        effects: [],
+      };
 
     case "snapshotTaken": {
       // A good snapshot resets the backoff: the session is answering again, so
       // the next dropped poll starts counting from scratch rather than
       // inheriting a five-second gap from an outage that is over.
       const next = { ...state, snapshot: event.snapshot, snapshotAt: at, failures: 0, at };
-      return { state: next, effects: schedulePoll(next) };
+      return {
+        state: { ...next, visited: settle(state.visited, ordered(next)) },
+        effects: schedulePoll(next),
+      };
     }
 
     case "snapshotFailed": {
@@ -222,9 +279,20 @@ export function reduce(
       // The nonce goes out even when there is nothing to focus: the user asked
       // to be taken to the session, and an exact raise still needs a marked
       // window to aim at.
-      const next = { ...state, presses: state.presses + 1, at };
-      const nonce = nonceFor(next);
-      const target = pressTarget(next);
+      const stepped = { ...state, presses: state.presses + 1, at };
+      const nonce = nonceFor(stepped);
+      const target = pressTarget(stepped);
+      // A press that aimed at nothing leaves the cycle where it was: there is
+      // no visit to record, and a grey face means the plugin does not trust
+      // what it knows well enough to spend a step of the cycle on it.
+      const next =
+        target === null
+          ? stepped
+          : {
+              ...stepped,
+              visited: settle(new Set([...stepped.visited, target]), ordered(stepped)),
+              aimedAt: target,
+            };
       return {
         state: next,
         effects: [
@@ -244,7 +312,16 @@ export function reduce(
       // pane clears herdr's `seen` for every pane in that tab — and a focus
       // that failed means the snapshot the press was aimed with is already
       // wrong. Either way the only honest next move is to look again.
-      const next = { ...state, at };
+      //
+      // A focus that failed also gives its visit back: the cycle records where
+      // a press *took* the user, and this one took them nowhere. If the pane
+      // died the next snapshot prunes it anyway; if it did not, the next press
+      // tries it again.
+      const visited =
+        event.ok || state.aimedAt === null
+          ? state.visited
+          : new Set([...state.visited].filter((paneId) => paneId !== state.aimedAt));
+      const next = { ...state, visited, aimedAt: null, at };
       return { state: next, effects: probe(next) };
     }
 
@@ -261,6 +338,11 @@ export function reduce(
  * The pane this press should focus, or `null` for "focus nothing and just
  * raise".
  *
+ * The highest-priority pane the cycle has not shown yet — which is the
+ * top-priority agent at the start of a cycle and diverges from it thereafter.
+ * The visited set is settled on the way *in*, so it is never full here and this
+ * cannot come back null for want of an unvisited pane.
+ *
  * Null in exactly two cases, and they are the same case seen twice: there is
  * nothing waiting, or the face is grey. A grey tile is the plugin saying it
  * does not trust what it knows, and acting on distrusted data would make that
@@ -269,7 +351,7 @@ export function reduce(
  */
 function pressTarget(state: CoreState): string | null {
   if (state.snapshot === null || stateColour(state) === "grey") return null;
-  return attentionSet(state.snapshot.agents)[0]?.paneId ?? null;
+  return ordered(state).find((agent) => !state.visited.has(agent.paneId))?.paneId ?? null;
 }
 
 /**

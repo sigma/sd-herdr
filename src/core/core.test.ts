@@ -432,6 +432,149 @@ describe("a press", () => {
   });
 });
 
+describe("the press cycle", () => {
+  const pressAt = (at: number): CoreEvent => ({ type: "pressed", at });
+
+  /** Which panes a run of events actually put the cursor in, in order. */
+  const focused = (effects: readonly Effect[]): string[] =>
+    effects.filter((e) => e.type === "focusPane").map((e) => e.paneId);
+
+  /** `count` presses against one unchanging snapshot, a tenth of a second apart. */
+  const presses = (name: Parameters<typeof fixture>[0], count: number): string[] =>
+    focused(
+      drive([
+        APPEAR,
+        snapshotAt(2000, name),
+        ...Array.from({ length: count }, (_, i) => pressAt(2100 + i * 100)),
+      ]).effects,
+    );
+
+  it("visits successive attention panes in priority order", () => {
+    expect(presses("mixed-tiers", 4)).toEqual(["w3:p1", "w0:p1", "w1:p1", "w2:p1"]);
+  });
+
+  it("gives each of two agents tiled in one tab its own press", () => {
+    // Stepping is pane-granular over a pane-keyed visited set. Tab-granular
+    // stepping would mark w0:p7 visited on the press that reached w0:p2 and
+    // leave it unreachable by button — in exactly the case the button exists
+    // for, since spawning agents from agents is the point of herdr.
+    expect(presses("split-tab", 3)).toEqual(["w0:p2", "w0:p7", "w1:p1"]);
+  });
+
+  it("wraps back to the top once every attention pane has been visited", () => {
+    expect(presses("mixed-tiers", 6)).toEqual([
+      "w3:p1",
+      "w0:p1",
+      "w1:p1",
+      "w2:p1",
+      // Wrapped — and without spending a press on the wrap itself.
+      "w3:p1",
+      "w0:p1",
+    ]);
+  });
+
+  it("keeps walking when a new agent arrives mid-cycle, rather than starting over", () => {
+    // The visited set is pruned, never reset on membership change. An earlier
+    // design reset it here, and that rule was the sole cause of done-tier
+    // starvation: it walked the user back through agents they had just seen.
+    const { effects } = drive([
+      APPEAR,
+      snapshotAt(2000, "done-pair"),
+      pressAt(2100),
+      snapshotAt(2200, "done-pair-newcomer"),
+      pressAt(2300),
+    ]);
+    expect(focused(effects)).toEqual(["w0:p1", "w0:p2"]);
+  });
+
+  it("prunes a pane that leaves the attention set, so it is reachable when it returns", () => {
+    // w0:p1 is visited, then leaves, then comes back. A stale entry would skip
+    // it — the pane is new to this cycle again, because the cycle never saw it.
+    const { effects } = drive([
+      APPEAR,
+      snapshotAt(2000, "done-pair"),
+      pressAt(2100),
+      snapshotAt(2200, "done-pair-consumed"),
+      pressAt(2300),
+      snapshotAt(2400, "done-pair"),
+      pressAt(2500),
+    ]);
+    expect(focused(effects)).toEqual(["w0:p1", "w1:p1", "w0:p1"]);
+  });
+
+  it("discards the visited set when the button goes away", () => {
+    const { effects } = drive([
+      APPEAR,
+      snapshotAt(2000, "mixed-tiers"),
+      pressAt(2100),
+      { type: "disappeared", at: 2200 },
+      { type: "appeared", at: 2300 },
+      snapshotAt(2400, "mixed-tiers"),
+      pressAt(2500),
+    ]);
+    expect(focused(effects)).toEqual(["w3:p1", "w3:p1"]);
+  });
+
+  it("has no idle-timeout reset: a long quiet gap does not walk the user back", () => {
+    // The only resets are wrap, willDisappear and a detected server restart.
+    // A timer here would layer invisible state on invisible state and march the
+    // user back through blocked tabs they have already answered.
+    const quiet = Array.from({ length: 60 }, (_, i) => snapshotAt(3000 + i * 1000, "mixed-tiers"));
+    const { effects } = drive([
+      APPEAR,
+      snapshotAt(2000, "mixed-tiers"),
+      pressAt(2100),
+      ...quiet,
+      pressAt(63_000),
+    ]);
+    expect(focused(effects)).toEqual(["w3:p1", "w0:p1"]);
+  });
+
+  it("un-visits a pane the focus never reached, because it took the user nowhere", () => {
+    const { effects } = drive([
+      APPEAR,
+      snapshotAt(2000, "mixed-tiers"),
+      pressAt(2100),
+      { type: "focusResult", at: 2200, ok: false },
+      snapshotAt(2300, "mixed-tiers"),
+      pressAt(2400),
+    ]);
+    expect(focused(effects)).toEqual(["w3:p1", "w3:p1"]);
+  });
+
+  it("leaves the visited set alone on a press it declined to aim", () => {
+    // Grey means the plugin does not trust what it knows; recording a visit
+    // that never happened would spend a cycle step on it.
+    const { effects } = drive([
+      APPEAR,
+      snapshotAt(2000, "mixed-tiers"),
+      { type: "pressed", at: 6000 },
+      snapshotAt(6100, "mixed-tiers"),
+      pressAt(6200),
+    ]);
+    expect(focused(effects)).toEqual(["w3:p1"]);
+  });
+
+  it("consumes every done agent in the tab it lands in, leaving the second unreachable", () => {
+    // Asserted as intended behaviour, not tolerated as a bug. Focusing any pane
+    // calls herdr's mark_active_tab_seen(), which clears `seen` for every pane
+    // in that tab — and `done` is (idle, seen = false). So the press that
+    // reaches w0:p1 consumes w0:p2 as well, and no press ever lands there.
+    // The face gives no warning: the cost is one the user cannot avoid.
+    const { effects } = drive([
+      APPEAR,
+      snapshotAt(2000, "done-pair"),
+      pressAt(2100),
+      { type: "focusResult", at: 2200, ok: true },
+      snapshotAt(2300, "done-pair-consumed"),
+      pressAt(2400),
+      pressAt(2500),
+    ]);
+    expect(focused(effects)).not.toContain("w0:p2");
+    expect(focused(effects)).toEqual(["w0:p1", "w1:p1", "w1:p1"]);
+  });
+});
+
 describe("the heartbeat", () => {
   it("keeps beating while the button is on screen", () => {
     expect(drive([APPEAR, tickAt(1500)]).last).toEqual([{ type: "tickAfter", ms: 500 }]);

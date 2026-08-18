@@ -1,0 +1,106 @@
+{
+  "provenance": {
+    "kind": "derived",
+    "derivedFrom": "done-pair.json",
+    "note": "HAND-DERIVED, not captured. What herdr reports one poll after a press focused `w0:p1`: focusing any pane calls `mark_active_tab_seen()`, which clears `seen` for **every** pane in that tab, and `done` is `(idle, seen = false)` — so both agents in w0:t1 come back as plain `idle`, not just the one the press landed on. Trimmed to the fields this scenario exercises.",
+    "shape": "`done-pair.json` after one press. Both panes of w0:t1 are `idle`; the lone agent in w1:t1 is untouched and still `done`."
+  },
+  "snapshot": {
+    "version": "0.8.0",
+    "protocol": 19,
+    "focused_workspace_id": "w0",
+    "focused_tab_id": "w0:t1",
+    "focused_pane_id": "w0:p1",
+    "workspaces": [
+      {
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "trunk",
+        "focused": true,
+        "pane_count": 2,
+        "tab_count": 1,
+        "active_tab_id": "w0:t1",
+        "agent_status": "idle"
+      },
+      {
+        "workspace_id": "w1",
+        "number": 2,
+        "label": "nix",
+        "focused": false,
+        "pane_count": 1,
+        "tab_count": 1,
+        "active_tab_id": "w1:t1",
+        "agent_status": "done"
+      }
+    ],
+    "tabs": [
+      {
+        "tab_id": "w0:t1",
+        "workspace_id": "w0",
+        "number": 1,
+        "label": "1",
+        "focused": true,
+        "pane_count": 2,
+        "agent_status": "idle"
+      },
+      {
+        "tab_id": "w1:t1",
+        "workspace_id": "w1",
+        "number": 1,
+        "label": "1",
+        "focused": false,
+        "pane_count": 1,
+        "agent_status": "done"
+      }
+    ],
+    "panes": [],
+    "layouts": [],
+    "agents": [
+      {
+        "terminal_id": "term_ddd0000000001",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "idle",
+        "workspace_id": "w0",
+        "tab_id": "w0:t1",
+        "pane_id": "w0:p1",
+        "focused": true,
+        "state_change_seq": 400,
+        "cwd": "/Users/dev/src/trunk",
+        "foreground_cwd": "/Users/dev/src/trunk",
+        "revision": 13
+      },
+      {
+        "terminal_id": "term_ddd0000000002",
+        "agent": "codex",
+        "terminal_title": "codex",
+        "terminal_title_stripped": "codex",
+        "agent_status": "idle",
+        "workspace_id": "w0",
+        "tab_id": "w0:t1",
+        "pane_id": "w0:p2",
+        "focused": false,
+        "state_change_seq": 401,
+        "cwd": "/Users/dev/src/trunk",
+        "foreground_cwd": "/Users/dev/src/trunk",
+        "revision": 19
+      },
+      {
+        "terminal_id": "term_ddd0000000003",
+        "agent": "claude",
+        "terminal_title": "✳ Claude Code",
+        "terminal_title_stripped": "Claude Code",
+        "agent_status": "done",
+        "workspace_id": "w1",
+        "tab_id": "w1:t1",
+        "pane_id": "w1:p1",
+        "focused": false,
+        "state_change_seq": 300,
+        "cwd": "/Users/dev/.config/nix",
+        "foreground_cwd": "/Users/dev/.config/nix",
+        "revision": 7
+      }
+    ]
+  }
+}

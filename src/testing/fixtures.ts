@@ -18,6 +18,9 @@ export const FIXTURE_NAMES = [
   "unknown-only",
   "no-agents",
   "split-tab",
+  "done-pair",
+  "done-pair-consumed",
+  "done-pair-newcomer",
 ] as const;
 
 /**

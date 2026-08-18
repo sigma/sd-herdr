@@ -46,8 +46,8 @@ export class AttentionAction extends SingletonAction {
   override onWillDisappear(ev: WillDisappearEvent): void {
     const runner = this.runners.get(ev.action.id);
     if (runner === undefined) return;
-    // The button is gone, and so is the reason to poll. The visited set is
-    // cleared on willDisappear too — but that is #23's, once a cycle exists.
+    // The button is gone, and so is the reason to poll — and with it the press
+    // cycle, whose visited set the core discards on this event.
     runner.disappeared();
     this.runners.delete(ev.action.id);
   }

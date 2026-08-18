@@ -40,6 +40,9 @@ Derived fixtures carry only the fields their scenario exercises, and say so.
 | `snapshots/unknown-only.json` | derived | Attention made of `unknown`, plus one entry with no `agent` field. |
 | `snapshots/no-agents.json` | derived | A live session with no agents — the honest dark face. |
 | `snapshots/split-tab.json` | derived | `agent \| shell \| agent` in one tab, listed out of geometric order. |
+| `snapshots/done-pair.json` | derived | Two `done` agents tiled in one tab, plus a third alone — the tab-scoped consumption case. |
+| `snapshots/done-pair-consumed.json` | derived | `done-pair.json` one poll after a press: the whole tab came back `idle`. |
+| `snapshots/done-pair-newcomer.json` | derived | `done-pair.json` plus an agent that arrived mid-cycle, last in priority order. |
 
 ## Adding one
 
