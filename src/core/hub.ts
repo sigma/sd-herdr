@@ -7,8 +7,9 @@
  * ~110 ms and ~15 KB, and duplicating it scales badly with the number of
  * buttons and terribly with a Stream Deck full of them.
  *
- * So the loop is keyed on the socket path, and the buttons are subscribers to
- * it. They share the cycle as well as the poll, which is the honest reading of
+ * So the loop is keyed on the session key (an opaque string; herdr's is the
+ * socket path), and the buttons are subscribers to it. They share the cycle as
+ * well as the poll, which is the honest reading of
  * a visited set that belongs to a session rather than to a key: two tiles on
  * one session are two views of one walk through it.
  *
@@ -56,7 +57,7 @@ export class SessionHub {
 
   constructor(private readonly adapters: SharedAdapters) {}
 
-  /** How many poll loops are running. The thing "one loop per socket" is a claim about. */
+  /** How many poll loops are running. The thing "one loop per session key" is a claim about. */
   get loops(): number {
     return this.sessions.size;
   }
@@ -65,9 +66,9 @@ export class SessionHub {
    * Point a button at a session, starting that session's loop if it is the
    * first one there.
    */
-  join(sessionName: string, socketPath: string, subscriber: Subscriber): Membership {
-    const existing = this.sessions.get(socketPath);
-    const session = existing ?? this.open(sessionName, socketPath);
+  join(sessionName: string, sessionKey: string, subscriber: Subscriber): Membership {
+    const existing = this.sessions.get(sessionKey);
+    const session = existing ?? this.open(sessionName, sessionKey);
     session.subscribers.add(subscriber);
 
     if (existing === undefined) {
@@ -85,12 +86,12 @@ export class SessionHub {
         session.pressers.push(subscriber);
         session.runner.pressed();
       },
-      leave: () => this.leave(socketPath, subscriber),
+      leave: () => this.leave(sessionKey, subscriber),
     };
   }
 
-  private leave(socketPath: string, subscriber: Subscriber): void {
-    const session = this.sessions.get(socketPath);
+  private leave(sessionKey: string, subscriber: Subscriber): void {
+    const session = this.sessions.get(sessionKey);
     if (session === undefined) return;
     session.subscribers.delete(subscriber);
     // A press whose raise never came back must not be handed to some other
@@ -105,10 +106,10 @@ export class SessionHub {
     // record of one sitting at the keyboard — reopening it later should start
     // at the top rather than mid-walk.
     session.runner.disappeared();
-    this.sessions.delete(socketPath);
+    this.sessions.delete(sessionKey);
   }
 
-  private open(sessionName: string, socketPath: string): Session {
+  private open(sessionName: string, sessionKey: string): Session {
     const session: Session = {
       // Assigned immediately below; the adapters close over `session`, and
       // nothing calls them before the constructor returns.
@@ -117,7 +118,7 @@ export class SessionHub {
       pressers: [],
       last: null,
     };
-    session.runner = new Runner(sessionName, socketPath, {
+    session.runner = new Runner(sessionName, sessionKey, {
       ...this.adapters,
       paint: (face) => {
         session.last = face;
@@ -131,7 +132,7 @@ export class SessionHub {
         return presser?.raise(nonce) ?? Promise.resolve();
       },
     });
-    this.sessions.set(socketPath, session);
+    this.sessions.set(sessionKey, session);
     return session;
   }
 }

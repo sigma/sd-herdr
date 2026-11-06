@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { Snapshot } from "../herdr/snapshot.js";
 import { fixture } from "../testing/fixtures.js";
 import { attentionSet } from "./attention.js";
 import { bodyFor, paneIndex } from "./body.js";
+import type { Snapshot } from "./snapshot.js";
 
 /** The body a given pane would get, from the snapshot it was seen in. */
 const bodyOf = (name: Parameters<typeof fixture>[0], paneId: string): string => {
@@ -51,7 +51,7 @@ describe("bodyFor", () => {
   });
 
   it("falls back to the workspace id when the snapshot carries no labels", () => {
-    const bare: Snapshot = { ...fixture("blocked-one"), workspaces: undefined };
+    const bare: Snapshot = { ...fixture("blocked-one"), groups: undefined };
     expect(bodyFor(bare, attentionSet(bare.agents), "w0:p1")).toBe("w0");
   });
 
@@ -76,11 +76,11 @@ describe("paneIndex", () => {
       ...fixture("split-tab"),
       layouts: [
         {
-          tab_id: "t",
+          tabId: "t",
           panes: [
-            { pane_id: "bottom", rect: { x: 0, y: 80 } },
-            { pane_id: "top-right", rect: { x: 40, y: 0 } },
-            { pane_id: "top-left", rect: { x: 0, y: 0 } },
+            { paneId: "bottom", x: 0, y: 80 },
+            { paneId: "top-right", x: 40, y: 0 },
+            { paneId: "top-left", x: 0, y: 0 },
           ],
         },
       ],

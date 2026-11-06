@@ -11,7 +11,9 @@ import streamDeck, {
 import { type Membership, SessionHub } from "../core/hub.js";
 import type { FaceDescriptor } from "../face/descriptor.js";
 import { renderFaceSvg, svgToImageUri } from "../face/render.js";
+import { HERDR } from "../herdr/backend.js";
 import { clearWindowTitle, focusPane, ping, setWindowTitle, snapshot } from "../herdr/client.js";
+import { fromHerdr } from "../herdr/convert.js";
 import { clientSocketPathFor, DEFAULT_SESSION, socketPathFor } from "../herdr/session.js";
 import { describeRaise } from "../raise/ladder.js";
 import { raise } from "../raise/spawn.js";
@@ -54,7 +56,9 @@ function configured(value: string | undefined, fallback: string): string {
  * *socket path*: two keys pointed at one session share a loop wherever they sit.
  */
 const hub = new SessionHub({
-  snapshot,
+  backend: HERDR,
+  // herdr's session key is its socket path, so the key goes straight through.
+  snapshot: async (socketPath) => fromHerdr(await snapshot(socketPath)),
   // The pong goes to the log and nowhere else. It is the record of which herdr
   // this button spent its life talking to — the one thing that makes a version
   // skew after a herdr update readable after the fact.

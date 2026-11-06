@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { FaceDescriptor } from "../face/descriptor.js";
-import type { Snapshot } from "../herdr/snapshot.js";
+import { HERDR } from "../herdr/backend.js";
 import { fixture } from "../testing/fixtures.js";
 import { type Adapters, Runner } from "./runner.js";
+import type { Snapshot } from "./snapshot.js";
 
 /**
  * A world under the test's control. Time advances because the test says so and
@@ -20,6 +21,7 @@ function world(overrides: Partial<Adapters> = {}) {
   let clock = 1000;
 
   const adapters: Adapters = {
+    backend: HERDR,
     async snapshot(socketPath): Promise<Snapshot> {
       calls.push(`snapshot:${socketPath}`);
       return fixture("blocked-one");

@@ -10,8 +10,8 @@
  * The body changing as you step is also the only sign of where in the cycle a
  * press has got to — the tile has no other room to say it.
  */
-import type { Snapshot } from "../herdr/snapshot.js";
 import type { AttentionAgent } from "./attention.js";
+import type { Snapshot } from "./snapshot.js";
 
 /**
  * The pane index's glyphs. Circled numerals rather than a bare digit, so the
@@ -35,19 +35,16 @@ function circled(index: number): string {
  * `pane_id`, whose suffixes are neither contiguous nor ordered.
  */
 export function paneIndex(snapshot: Snapshot, tabId: string, paneId: string): number | null {
-  const layout = snapshot.layouts?.find((entry) => entry.tab_id === tabId);
+  const layout = snapshot.layouts?.find((entry) => entry.tabId === tabId);
   if (layout === undefined) return null;
-  const ordered = [...layout.panes].sort((x, y) => x.rect.y - y.rect.y || x.rect.x - y.rect.x);
-  const at = ordered.findIndex((pane) => pane.pane_id === paneId);
+  const ordered = [...layout.panes].sort((x, y) => x.y - y.y || x.x - y.x);
+  const at = ordered.findIndex((pane) => pane.paneId === paneId);
   return at < 0 ? null : at + 1;
 }
 
-/** The workspace's label, falling back to its id when the snapshot carries no labels. */
-function workspaceLabel(snapshot: Snapshot, workspaceId: string): string {
-  return (
-    snapshot.workspaces?.find((workspace) => workspace.workspace_id === workspaceId)?.label ??
-    workspaceId
-  );
+/** The group's label, falling back to its id when the snapshot carries no labels. */
+function groupLabel(snapshot: Snapshot, groupId: string): string {
+  return snapshot.groups?.find((group) => group.groupId === groupId)?.label ?? groupId;
 }
 
 /**
@@ -70,7 +67,7 @@ export function bodyFor(
   const target = ordered.find((agent) => agent.paneId === targetPaneId);
   if (target === undefined) return "";
 
-  const label = workspaceLabel(snapshot, target.workspaceId);
+  const label = groupLabel(snapshot, target.groupId);
   const hasSibling = ordered.some(
     (agent) => agent.tabId === target.tabId && agent.paneId !== target.paneId,
   );

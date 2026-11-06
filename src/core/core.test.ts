@@ -1,18 +1,23 @@
 import { describe, expect, it } from "vitest";
 
+import { HERDR } from "../herdr/backend.js";
 import { fixture } from "../testing/fixtures.js";
 import { attentionSet } from "./attention.js";
+import type { Backend } from "./backend.js";
 import {
   type CoreEvent,
   type CoreState,
+  initial as coreInitial,
   type Effect,
   face,
-  initial,
   POLL_INTERVAL_MS,
   reduce,
-  SETTLE_WINDOW_MS,
   STALENESS_DEADLINE_MS,
 } from "./core.js";
+
+/** herdr is the only backend so far; the core is handed it like any other. */
+const initial = (sessionName: string, sessionKey: string, backend: Backend = HERDR) =>
+  coreInitial(sessionName, sessionKey, backend);
 
 /** Where the `default` session's socket lives, by herdr's path convention. */
 const SOCK = "/Users/dev/.config/herdr/herdr.sock";
@@ -173,8 +178,8 @@ describe("reduce", () => {
   it("snapshots the session's socket as soon as the button appears", () => {
     expect(drive([APPEAR]).last).toEqual([
       // The startup ping, which names the server this loop will be talking to.
-      { type: "ping", socketPath: SOCK },
-      { type: "snapshot", socketPath: SOCK },
+      { type: "ping", sessionKey: SOCK },
+      { type: "snapshot", sessionKey: SOCK },
       { type: "tickAfter", ms: 500 },
     ]);
   });
@@ -190,7 +195,7 @@ describe("reduce", () => {
       snapshotAt(2000, "blocked-one"),
       { type: "pollDue", at: 3000 },
     ]);
-    expect(last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+    expect(last).toEqual([{ type: "snapshot", sessionKey: SOCK }]);
   });
 
   it("keeps asking on the poll cadence after a failure", () => {
@@ -200,7 +205,7 @@ describe("reduce", () => {
       { type: "snapshotFailed", at: 3000 },
       { type: "pollDue", at: 4000 },
     ]);
-    expect(last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+    expect(last).toEqual([{ type: "snapshot", sessionKey: SOCK }]);
   });
 
   it("greys out and keeps trying when the very first snapshot fails", () => {
@@ -235,8 +240,8 @@ describe("reduce", () => {
       { type: "appeared", at: 5000 },
     ]);
     expect(last).toEqual([
-      { type: "ping", socketPath: SOCK },
-      { type: "snapshot", socketPath: SOCK },
+      { type: "ping", sessionKey: SOCK },
+      { type: "snapshot", sessionKey: SOCK },
       { type: "tickAfter", ms: 500 },
     ]);
   });
@@ -392,14 +397,14 @@ describe("a press", () => {
   it("focuses the top-priority agent, not the first one herdr listed", () => {
     expect(press("mixed-tiers").last).toContainEqual({
       type: "focusPane",
-      socketPath: SOCK,
+      sessionKey: SOCK,
       paneId: "w3:p1",
     });
   });
 
   it("raises under the same nonce it wrote, so the raise can find the window", () => {
     const [set, , raise] = press("blocked-one").last;
-    expect(set).toEqual({ type: "setTitle", socketPath: SOCK, nonce: expect.any(String) });
+    expect(set).toEqual({ type: "setTitle", sessionKey: SOCK, nonce: expect.any(String) });
     expect(raise).toEqual({ type: "raise", nonce: (set as { nonce: string }).nonce });
   });
 
@@ -447,7 +452,7 @@ describe("a press", () => {
       PRESS,
       { type: "focusResult", at: 2600, ok: true },
     ]);
-    expect(last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+    expect(last).toEqual([{ type: "snapshot", sessionKey: SOCK }]);
   });
 
   it("re-snapshots and stops when the pane died between the poll and the press", () => {
@@ -459,7 +464,7 @@ describe("a press", () => {
       PRESS,
       { type: "focusResult", at: 2600, ok: false },
     ]);
-    expect(last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+    expect(last).toEqual([{ type: "snapshot", sessionKey: SOCK }]);
   });
 });
 
@@ -757,8 +762,8 @@ describe("settling after a server restart", () => {
   it("sizes the hold from its own constant, not the staleness deadline", () => {
     // Two deadlines answering two questions. Sharing one constant would make a
     // change to either a silent change to the other.
-    expect(SETTLE_WINDOW_MS).toBe(4000);
-    expect(SETTLE_WINDOW_MS).not.toBe(STALENESS_DEADLINE_MS);
+    expect(HERDR.settleMs).toBe(4000);
+    expect(HERDR.settleMs).not.toBe(STALENESS_DEADLINE_MS);
   });
 
   it("pings on the restart, and on nothing else in between", () => {
@@ -769,8 +774,8 @@ describe("settling after a server restart", () => {
     );
     // Two: the one at startup, and the one for the boundary. Never per poll.
     expect(effects.filter((e) => e.type === "ping")).toEqual([
-      { type: "ping", socketPath: SOCK },
-      { type: "ping", socketPath: SOCK },
+      { type: "ping", sessionKey: SOCK },
+      { type: "ping", sessionKey: SOCK },
     ]);
   });
 
@@ -814,5 +819,72 @@ describe("the heartbeat", () => {
   it("does not itself ask herdr for anything", () => {
     const { effects } = drive([APPEAR, snapshotAt(2000, "blocked-one"), tickAt(2500)]);
     expect(effects.filter((e) => e.type === "snapshot")).toHaveLength(1);
+  });
+});
+
+describe("a backend's constants", () => {
+  /** A backend with nothing herdr about it, to show the core reads only the constants. */
+  const QUIET: Backend = {
+    name: "quiet",
+    marksWindow: false,
+    settleMs: 0,
+    plateFor: (sessionName) => sessionName,
+  };
+  const quiet = () => initial("s", "key", QUIET);
+
+  it("emits no title effects when it does not mark the window", () => {
+    const { last } = drive(
+      [APPEAR, snapshotAt(2000, "blocked-one"), { type: "pressed", at: 2100 }],
+      quiet(),
+    );
+    expect(last.map((e) => e.type)).toEqual(["focusPane", "raise"]);
+  });
+
+  it("still raises when there is nothing to focus and no window to mark", () => {
+    const { last } = drive(
+      [APPEAR, snapshotAt(2000, "no-agents"), { type: "pressed", at: 2100 }],
+      quiet(),
+    );
+    expect(last.map((e) => e.type)).toEqual(["raise"]);
+  });
+
+  it("marks the window when the backend says to", () => {
+    const { last } = drive([
+      APPEAR,
+      snapshotAt(2000, "blocked-one"),
+      { type: "pressed", at: 2100 },
+    ]);
+    expect(last.map((e) => e.type)).toEqual(["setTitle", "focusPane", "raise", "clearTitle"]);
+  });
+
+  it("resets the visited set on a restart without holding the face grey when settleMs is 0", () => {
+    const { effects, state } = drive(
+      [
+        APPEAR,
+        snapshotAt(2000, "blocked-one"),
+        { type: "pressed", at: 2100 },
+        snapshotAt(3000, "restart-empty"),
+        // The same instant the restart is seen: a hold of any length would show here.
+        tickAt(3000),
+      ],
+      quiet(),
+    );
+    expect(face(state).stateColour).toBe("dark");
+
+    const again = drive(
+      [snapshotAt(3100, "restart-redetected"), { type: "pressed", at: 3200 }],
+      state,
+    );
+    // w0:p1 was visited before the boundary and is reachable again after it.
+    expect(
+      [...effects, ...again.effects].filter((e) => e.type === "focusPane").map((e) => e.paneId),
+    ).toEqual(["w0:p1", "w0:p1"]);
+    expect(face(again.state).stateColour).toBe("red");
+  });
+
+  it("takes its grey plate and its live plate from the backend", () => {
+    expect(face(initial("s", "key", QUIET)).nameplate).toBe("quiet");
+    const live = drive([APPEAR, snapshotAt(2000, "blocked-one")], quiet());
+    expect(face(live.state).nameplate).toBe("s");
   });
 });

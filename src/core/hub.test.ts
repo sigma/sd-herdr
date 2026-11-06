@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { FaceDescriptor } from "../face/descriptor.js";
-import type { Snapshot } from "../herdr/snapshot.js";
+import { HERDR } from "../herdr/backend.js";
 import { fixture } from "../testing/fixtures.js";
 import { SessionHub, type SharedAdapters, type Subscriber } from "./hub.js";
+import type { Snapshot } from "./snapshot.js";
 
 const SOCK = "/Users/dev/.config/herdr/herdr.sock";
 const OTHER = "/Users/dev/.config/herdr/sessions/work/herdr.sock";
@@ -15,6 +16,7 @@ function world(snapshotFor: (socketPath: string) => Snapshot = () => fixture("mi
   let clock = 1000;
 
   const adapters: SharedAdapters = {
+    backend: HERDR,
     async snapshot(socketPath) {
       calls.push(`snapshot:${socketPath}`);
       return snapshotFor(socketPath);
