@@ -13,10 +13,11 @@ export type AttentionStatus = "blocked" | "done" | "working" | "unknown";
  * "already looked at, no follow-up" — there is nothing left to walk to.
  *
  * The ranks differ mechanically, not merely in urgency: focusing a `done` agent
- * consumes it, focusing a `blocked` agent changes nothing, a `working` agent is
- * not waiting on the user at all — it is somewhere to *check on* rather than
- * somewhere owed an answer — and an `unknown` agent is one the plugin cannot
- * speak for at all.
+ * consumes it on herdr (Rex keeps `done` until the agent's next turn, and the
+ * visited set walks it like any other), focusing a `blocked` agent changes
+ * nothing, a `working` agent is not waiting on the user at all — it is
+ * somewhere to *check on* rather than somewhere owed an answer — and an
+ * `unknown` agent is one the plugin cannot speak for at all.
  */
 export const TIER: Record<AttentionStatus, number> = {
   blocked: 0,

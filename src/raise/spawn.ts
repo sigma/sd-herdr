@@ -97,6 +97,11 @@ const DISCOVERY: Discovery = {
   log: (message) => streamDeck.logger.debug(message),
 };
 
+/** Bring an app forward by bundle id (`open -b`). True when `open` succeeded. */
+export async function openBundle(bundleId: string): Promise<boolean> {
+  return (await run("/usr/bin/open", ["-b", bundleId])).code === 0;
+}
+
 /** What one press needs to know about the session it is raising for. */
 export interface RaiseOptions {
   /** herdr's client socket, which is what the host-app walk correlates against. */
@@ -130,7 +135,7 @@ export async function raise(nonce: string, options: RaiseOptions): Promise<Raise
         },
         log: (message) => streamDeck.logger.debug(message),
       }),
-    activate: async (bundleId) => (await run("/usr/bin/open", ["-b", bundleId])).code === 0,
+    activate: openBundle,
     log: (message) => streamDeck.logger.debug(message),
   });
 

@@ -17,10 +17,11 @@ import { clearWindowTitle, focusPane, ping, setWindowTitle, snapshot } from "../
 import { fromHerdr } from "../herdr/convert.js";
 import { clientSocketPathFor, DEFAULT_SESSION, socketPathFor } from "../herdr/session.js";
 import { describeRaise } from "../raise/ladder.js";
-import { raise } from "../raise/spawn.js";
+import { openBundle, raise } from "../raise/spawn.js";
 import { REX } from "../rex/backend.js";
 import { openRexSocket, RexControl } from "../rex/client.js";
 import { pollSession } from "../rex/poll.js";
+import { describePress, RexPress } from "../rex/press.js";
 import { rexSocketPath } from "../rex/session.js";
 
 /**
@@ -110,6 +111,9 @@ const rexControl = new RexControl(
   () => streamDeck.info.plugin.version,
 );
 
+/** The Rex press: its focus step is the hub's `focusPane`, its raise is per key. */
+const rexPress = new RexPress(rexControl, openBundle);
+
 /**
  * The Rex hub. Its session key is the `session_id`, so two tiles on one session
  * share one poll loop here as two herdr tiles do, and every loop shares
@@ -129,9 +133,8 @@ const rexHub = new SessionHub({
   // the core never emits these.
   setTitle: async () => {},
   clearTitle: async () => {},
-  // The Rex press (focus the block, show its tab, bring Rex forward) is #39; a
-  // press does nothing yet.
-  focusPane: async () => {},
+  // Step 1 of the press; a rejection is the core's failed focus.
+  focusPane: (sessionId, blockId) => rexPress.focus(sessionId, blockId),
   ...environment,
 });
 
@@ -235,13 +238,11 @@ export class AttentionAction extends SingletonAction {
     const release = sessionId === "" ? () => {} : rexControl.retain();
     const membership = rexHub.join(sessionId, sessionId, {
       paint: (face) => paint(key, face),
-      // The Rex press is #39; there is no raise yet.
-      raise: async () => {},
+      // Steps 2 and 3. There is no nonce: `marksWindow` is false.
+      raise: () => rexRaiseFor(key, sessionId),
     });
     return {
-      // Not forwarded: with no focus or raise behind it, a press would only
-      // walk the cycle and move the body. #39 wires it.
-      press: () => {},
+      press: () => membership.press(),
       leave: () => {
         membership.leave();
         release();
@@ -273,6 +274,18 @@ async function raiseFor(key: KeyAction, sessionName: string, nonce: string): Pro
   });
   if (report.outcome === "raised" && !report.usedConfiguredHostApp) return;
   streamDeck.logger.info(`degraded: ${describeRaise(report)}`);
+  await key.showAlert();
+}
+
+/**
+ * Show the session in the Rex app and bring Rex forward, alerting on the key
+ * (never the face) when either step failed, as `raiseFor` does for herdr.
+ */
+async function rexRaiseFor(key: KeyAction, sessionId: string): Promise<void> {
+  const report = await rexPress.raise(sessionId);
+  const degraded = describePress(report);
+  if (degraded === null) return;
+  streamDeck.logger.info(`degraded: ${degraded}`);
   await key.showAlert();
 }
 

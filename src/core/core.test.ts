@@ -615,6 +615,23 @@ describe("the press cycle", () => {
     expect(focused(effects)).toEqual(["w3:p1"]);
   });
 
+  it("on Rex, walks done targets that stay in the set once each, revisiting the first only after the wrap", () => {
+    // Rex keeps `done` until the agent's next turn, so each press is followed by
+    // the same snapshot. The visited set alone must carry the walk: no rule is
+    // special to `done`.
+    const rex = initial("session:abc", "session:abc", REX);
+    const press = (at: number): CoreEvent[] => [
+      pressAt(at),
+      { type: "focusResult", at: at + 50, ok: true },
+      snapshotAt(at + 80, "done-pair"),
+    ];
+    const { effects } = drive(
+      [APPEAR, snapshotAt(2000, "done-pair"), ...[2100, 2300, 2500, 2700].flatMap(press)],
+      rex,
+    );
+    expect(focused(effects)).toEqual(["w0:p1", "w0:p2", "w1:p1", "w0:p1"]);
+  });
+
   it("consumes every done agent in the tab it lands in, leaving the second unreachable", () => {
     // Asserted as intended behaviour, not tolerated as a bug. Focusing any pane
     // calls herdr's mark_active_tab_seen(), which clears `seen` for every pane
