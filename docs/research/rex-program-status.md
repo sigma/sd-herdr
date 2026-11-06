@@ -1,8 +1,7 @@
 # The lifecycle of a Rex program-status record
 
 Research for [sigma/sd-herdr#31](https://github.com/sigma/sd-herdr/issues/31) (map:
-[#29](https://github.com/sigma/sd-herdr/issues/29)). **Server side only**: what the Rex app
-does when a user *views* a `done` record was not measured (§6).
+[#29](https://github.com/sigma/sd-herdr/issues/29)).
 
 **Subject**: Rex server `0.0.1793890641-gaf0c20`, API revision 11, fish shell in the scratch
 terminal; Claude Code as the agent under observation. Protocol reference: the
@@ -17,6 +16,8 @@ Transport details are in [rex-control-api.md](rex-control-api.md).
   after each step.
 - **[O]** — observed: a background listener on the block hosting this Claude Code session,
   during ordinary use.
+- **[C]** — a scratch Claude Code (`v2.1.317`) in a throwaway session, given a one-word
+  prompt, then focused, shown in the Rex app, and typed at.
 - **[P]** — from the protocol specification.
 
 ## 1. ⚠️ Nothing on the server clears `done` or `error` except the program
@@ -30,7 +31,18 @@ Transport details are in [rex-control-api.md](rex-control-api.md).
 | the same, holding `error` | `error`, unchanged | none |
 | the program reports `state=clear` | removed | `program_status_removed {reason: "clear"}` |
 
-**[V]** All of it. The specification leaves this to the terminal ("the terminal decides when
+**[V]** All of it — and **[C]** the same for a real Claude Code `done`, which is the case
+that matters, because Claude Code turns on focus reporting (mode `1004` set) and so *could*
+react to being looked at:
+
+| Step, with the scratch Claude Code holding `done` | Record after |
+| --- | --- |
+| `session.focus_block` away and back, session not on screen | `done` |
+| `block.event` focus `out` then `in` | `done` |
+| the Rex app shows the session (`client.perform` → `session.select`), block focused | `done` |
+| key presses into it while shown (`space`, `backspace`) | `done` |
+
+Claude Code leaves `done` only when it starts its next turn. The specification leaves this to the terminal ("the terminal decides when
 to stop showing them, for example when the user returns to the terminal and presses a key",
 **[P]**), and this server's answer is: never, on its own. A record changes only when its
 program reports again or clears it.
@@ -89,10 +101,12 @@ wall-clock time and stays comparable across server restarts.
 | a turn starts | `working` | no `progress` |
 | it asks the user a question | `blocked` | `kind: "question"`, `msg` holds the question and its options as plain text |
 | the question is answered | `working` | |
+| the turn ends | `done` | **[C]** ~1 s after `working` for a one-word answer; also seen on a live agent left `done` for ~40 min |
 
-Not yet observed in this session: the end of a turn (`done` or `idle`?), a permission
-prompt (`kind: "permission"` expected), or an error. The listener's absence of reports while
-the agent worked confirms there is no heartbeat.
+The listener's absence of reports while the agent worked confirms there is no heartbeat.
+Another live agent read `idle` with no turn after it; the protocol asks programs to report
+`idle` when the user interrupts, which may explain it — not verified. Not observed: a
+permission prompt (`kind: "permission"` expected) or an error.
 
 The only Rex hook configured for Claude Code here is `rex __internal session-start`; the
 status reports come from Claude Code itself.
@@ -113,10 +127,9 @@ status reports come from Claude Code itself.
 
 ## 6. Not measured
 
-- **Whether the Rex app clears `done` when the user views it.** The server does not (§1).
-  The app shows status markers in its session picker and on unfocused tabs, and may hide
-  them once seen. No API method writes program status, so (inferred) any such hiding lives
-  in the app and leaves the server record as it was: the tile would stay green while the app
-  shows nothing. Needs the app test
-  deferred on the map.
-- The end of a Claude Code turn, permission prompts, and `error` from a real agent (§4).
+- Whether the Rex app's own status markers (session picker, unfocused tabs) disappear once
+  the user has seen a `done` agent. They are drawn by the app; the server record they would
+  be drawn from stays `done` (§1), and the tile reads the server. If the app does hide them,
+  the tile and the app disagree about a seen `done` agent: the tile stays green until the
+  agent's next turn.
+- Permission prompts and `error` from a real agent (§4).
