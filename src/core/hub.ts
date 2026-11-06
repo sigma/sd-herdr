@@ -94,8 +94,8 @@ export class SessionHub {
     const session = this.sessions.get(sessionKey);
     if (session === undefined) return;
     session.subscribers.delete(subscriber);
-    // A press whose raise never came back must not be handed to some other
-    // button later.
+    // A departed button leaves the queue: it has no key left to alert on. A
+    // raise that still comes back falls back to a remaining button (below).
     for (let i = session.pressers.length - 1; i >= 0; i -= 1) {
       if (session.pressers[i] === subscriber) session.pressers.splice(i, 1);
     }

@@ -47,8 +47,8 @@ const PIP_FILL: Record<PipColour, string> = {
   // one step milder — `#2E7D32` reads nearly black at 4px on this ground.
   green: "#43A047",
   amber: "#E8A317",
-  // The nameplate's grey *ink*, not its fill. A pip is a 4px dot on the tile's
-  // near-black ground, and the plate's `#33363D` disappears against it — an
+  // The grey face's body ink, not the plate's fill. A pip is a small dot on the
+  // tile's near-black ground, and the plate's `#33363D` disappears against it — an
   // `unknown` waiter would be counted by the row and invisible on it.
   grey: "#767B85",
 };
