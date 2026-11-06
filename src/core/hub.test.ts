@@ -216,8 +216,8 @@ describe("SessionHub", () => {
     expect(focuses(w.calls)).toEqual(["w3:p1", "w3:p1"]);
     // …and the nonce names the session it is raising, so the two never collide.
     expect(w.calls.filter((c) => c.startsWith("raise:"))).toEqual([
-      "raise:one:sd-herdr raise default #1",
-      "raise:one:sd-herdr raise work #1",
+      "raise:one:sd-mux raise default #1",
+      "raise:one:sd-mux raise work #1",
     ]);
   });
 
@@ -249,8 +249,8 @@ describe("SessionHub", () => {
     await w.settle();
 
     expect(w.calls.filter((c) => c.startsWith("raise:"))).toEqual([
-      "raise:one:sd-herdr raise default #1",
-      "raise:two:sd-herdr raise default #2",
+      "raise:one:sd-mux raise default #1",
+      "raise:two:sd-mux raise default #2",
     ]);
   });
 
@@ -282,7 +282,7 @@ describe("SessionHub", () => {
     await w.settle();
 
     expect(w.calls.filter((c) => c.startsWith("raise:"))).toEqual([
-      "raise:staying:sd-herdr raise default #1",
+      "raise:staying:sd-mux raise default #1",
     ]);
   });
 });

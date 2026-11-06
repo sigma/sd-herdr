@@ -1,17 +1,17 @@
 {
-  "name": "sd-herdr",
+  "name": "sd-mux",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Stream Deck attention button for a herdr session",
+  "description": "Stream Deck attention button for a herdr or Rex session",
   "packageManager": "pnpm@11.17.0",
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w",
     "test": "vitest run",
     "test:watch": "vitest",
-    "link": "streamdeck link dev.yrh.sd-herdr.sdPlugin",
-    "validate": "streamdeck validate dev.yrh.sd-herdr.sdPlugin"
+    "link": "streamdeck link dev.yrh.sd-mux.sdPlugin",
+    "validate": "streamdeck validate dev.yrh.sd-mux.sdPlugin"
   },
   "dependencies": {
     "@elgato/streamdeck": "^2.1.0",

@@ -462,7 +462,7 @@ function pressTarget(state: CoreState): string | null {
  * session name is in the string.
  */
 function nonceFor(state: CoreState): string {
-  return `sd-herdr raise ${state.sessionName} #${state.presses}`;
+  return `sd-mux raise ${state.sessionName} #${state.presses}`;
 }
 
 /**

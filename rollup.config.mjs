@@ -4,7 +4,7 @@ import commonjs from "@rollup/plugin-commonjs";
 import nodeResolve from "@rollup/plugin-node-resolve";
 import typescript from "@rollup/plugin-typescript";
 
-const uuid = "dev.yrh.sd-herdr";
+const uuid = "dev.yrh.sd-mux";
 const sdPlugin = `${uuid}.sdPlugin`;
 const isWatching = !!process.env.ROLLUP_WATCH;
 

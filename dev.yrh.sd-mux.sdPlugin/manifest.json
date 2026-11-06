@@ -1,11 +1,11 @@
 {
   "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
-  "Name": "herdr",
+  "Name": "sd-mux",
   "Version": "0.1.0.0",
   "Author": "Yann Hodique",
-  "Description": "Surfaces whether any agent in a herdr session needs attention, and takes you to the most urgent one.",
-  "Category": "herdr",
-  "URL": "https://github.com/sigma/sd-herdr",
+  "Description": "Surfaces whether any agent in a herdr or Rex session needs attention, and takes you to the most urgent one.",
+  "Category": "sd-mux",
+  "URL": "https://github.com/sigma/sd-mux",
   "Icon": "imgs/plugin/marketplace",
   "CategoryIcon": "imgs/plugin/category-icon",
   "CodePath": "bin/plugin.js",
@@ -23,14 +23,14 @@
     "Version": "20",
     "Debug": "enabled"
   },
-  "UUID": "dev.yrh.sd-herdr",
+  "UUID": "dev.yrh.sd-mux",
   "Actions": [
     {
       "Name": "Attention",
-      "UUID": "dev.yrh.sd-herdr.attention",
+      "UUID": "dev.yrh.sd-mux.attention",
       "Icon": "imgs/actions/attention",
       "PropertyInspectorPath": "ui/attention.html",
-      "Tooltip": "Show whether any herdr agent needs attention; press to go to it",
+      "Tooltip": "Show whether any herdr or Rex agent needs attention; press to go to it",
       "SupportedInMultiActions": false,
       "States": [
         {

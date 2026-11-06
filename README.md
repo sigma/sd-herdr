@@ -18,7 +18,11 @@ just install
 just link             # builds, then `streamdeck link` the .sdPlugin
 ```
 
-Then drag **herdr → Attention** onto a key. That is the whole setup: out of the box the
+**Upgrading from sd-herdr:** the plugin is now `dev.yrh.sd-mux`, and Stream Deck treats a
+new UUID as a new plugin. Keys placed under the old `dev.yrh.sd-herdr` stop working and must
+be dragged on again; `streamdeck unlink dev.yrh.sd-herdr` removes the old link.
+
+Then drag **sd-mux → Attention** onto a key. That is the whole setup: out of the box the
 tile follows the herdr session named `default` and starts painting within a poll, with
 nothing to configure and no `herdr` binary involved — the plugin talks to the session's
 unix socket directly, which matters because `herdr` is *not* on a plugin's `PATH`
@@ -165,7 +169,7 @@ immediately afterwards. If the herdr client dies in between, the clear answers
 `no_foreground_client` and the marker stays in the title bar permanently. It reads
 
 ```
-sd-herdr raise <session> #<n>
+sd-mux raise <session> #<n>
 ```
 
 rather than a hex blob for exactly this reason: the person who has to remove it is you.
@@ -238,7 +242,7 @@ src/actions/     the Stream Deck action — the only SDK-coupled code
 src/testing/     test-only access to the fixture corpus
 src/plugin.ts    the entry point
 fixtures/        captured and hand-derived herdr snapshots, each with its provenance
-dev.yrh.sd-herdr.sdPlugin/   the manifest, the property inspector and images;
+dev.yrh.sd-mux.sdPlugin/     the manifest, the property inspector and images;
                              bin/ is built, not committed
 ```
 

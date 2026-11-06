@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { AEROSPACE_CANDIDATES, type Aerospace, findAerospace, raiseByNonce } from "./aerospace.js";
 
-const NONCE = "sd-herdr raise default #1";
+const NONCE = "sd-mux raise default #1";
 
 /**
  * A world where `aerospace` answers whatever the test says, and where the

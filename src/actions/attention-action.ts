@@ -169,7 +169,7 @@ function targetKey(target: Target): string {
  * session hub, and remembers which session each key is currently pointed at so
  * that a settings change can repoint it.
  */
-@action({ UUID: "dev.yrh.sd-herdr.attention" })
+@action({ UUID: "dev.yrh.sd-mux.attention" })
 export class AttentionAction extends SingletonAction {
   private readonly buttons = new Map<string, { membership: Membership; target: string }>();
 

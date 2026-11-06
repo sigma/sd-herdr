@@ -439,13 +439,13 @@ describe("a press", () => {
     // no_foreground_client — so the user has to recognise it and clear it by hand.
     const { last } = press("blocked-one", "work");
     const nonce = (last[0] as { nonce: string }).nonce;
-    expect(nonce).toBe("sd-herdr raise work #1");
+    expect(nonce).toBe("sd-mux raise work #1");
   });
 
   it("counts presses, so two in flight do not answer to the same title", () => {
     const { effects } = drive([APPEAR, snapshotAt(2000, "blocked-one"), PRESS, PRESS]);
     const nonces = effects.filter((e) => e.type === "raise").map((e) => e.nonce);
-    expect(nonces).toEqual(["sd-herdr raise default #1", "sd-herdr raise default #2"]);
+    expect(nonces).toEqual(["sd-mux raise default #1", "sd-mux raise default #2"]);
   });
 
   it("raises and focuses nothing when nothing is waiting", () => {

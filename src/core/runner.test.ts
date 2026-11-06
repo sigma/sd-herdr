@@ -244,9 +244,9 @@ describe("Runner", () => {
     expect(w.calls).toEqual([
       `ping:${SOCK}`,
       `snapshot:${SOCK}`,
-      "setTitle:sd-herdr raise default #1",
+      "setTitle:sd-mux raise default #1",
       "focusPane:w0:p1",
-      "raise:sd-herdr raise default #1",
+      "raise:sd-mux raise default #1",
       "clearTitle",
       // Forced by the focus: one press can consume several done agents, so the
       // post-press attention set has to be re-read rather than predicted.
@@ -274,9 +274,7 @@ describe("Runner", () => {
     expect(w.calls.filter((c) => c.startsWith("raise"))).toEqual([]);
     release();
     await w.settle();
-    expect(w.calls.filter((c) => c.startsWith("raise"))).toEqual([
-      "raise:sd-herdr raise default #1",
-    ]);
+    expect(w.calls.filter((c) => c.startsWith("raise"))).toEqual(["raise:sd-mux raise default #1"]);
   });
 
   it("still raises, clears and re-snapshots when the pane died under the press", async () => {
@@ -295,8 +293,8 @@ describe("Runner", () => {
     expect(w.calls).toEqual([
       `ping:${SOCK}`,
       `snapshot:${SOCK}`,
-      "setTitle:sd-herdr raise default #1",
-      "raise:sd-herdr raise default #1",
+      "setTitle:sd-mux raise default #1",
+      "raise:sd-mux raise default #1",
       "clearTitle",
       `snapshot:${SOCK}`,
     ]);

@@ -1,10 +1,10 @@
-# sd-herdr task runner.
+# sd-mux task runner.
 # Run `just` with no arguments to list all recipes.
 # Assumes you're in the nix devShell (direnv `use flake`), which puts
 # node_modules/.bin — and so `streamdeck`, `biome`, `rollup` — on PATH.
 
-uuid := "dev.yrh.sd-herdr"
-plugin_log := "dev.yrh.sd-herdr.sdPlugin/logs/dev.yrh.sd-herdr.0.log"
+uuid := "dev.yrh.sd-mux"
+plugin_log := "dev.yrh.sd-mux.sdPlugin/logs/dev.yrh.sd-mux.0.log"
 
 # List available recipes
 default:

@@ -9,7 +9,7 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node"],
     "rootDir": "src",
-    "outDir": "dev.yrh.sd-herdr.sdPlugin/bin"
+    "outDir": "dev.yrh.sd-mux.sdPlugin/bin"
   },
   "include": ["src"]
 }

@@ -297,7 +297,7 @@ only of a handoff, and only for `blocked` agents).
 The human-legible marker the plugin writes into herdr's `client_window_title` to
 identify the host terminal window for raising. Human-legible rather than a hex blob
 because a client dying mid-press strands it in the title bar permanently. Written as
-`sd-herdr raise <session> #<n>`: it names the tool that wrote it and the session it was
+`sd-mux raise <session> #<n>`: it names the tool that wrote it and the session it was
 raising, and the counter tells one press's marker from an earlier one's. It is *not* a
 uniqueness device — a session has one `client_window_title`, so two tiles watching the
 same session collide there regardless.
