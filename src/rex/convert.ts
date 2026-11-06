@@ -139,10 +139,17 @@ function leaves(node: LayoutNode | null | undefined): PaneOrigin[] {
  * grid the index numbers. Agents are still gathered from every layer, so a
  * blocked agent on a floating layer turns the tile red; it just has no index.
  *
- * No lifetime marker yet: the server's `instance_id` arrives with restart
- * handling, and an absent marker never reads as a restart.
+ * The lifetime marker is the server's `instance_id`, passed in because the
+ * conversion calls nothing, under one fixed key: it is server-wide, so one
+ * witness is all the core's comparison needs.
  */
-export function fromRex(view: SessionView, reports: ReadonlyMap<string, BlockReport>): Snapshot {
+export const INSTANCE_KEY = "instance";
+
+export function fromRex(
+  view: SessionView,
+  reports: ReadonlyMap<string, BlockReport>,
+  instanceId: string,
+): Snapshot {
   const windows = view.windows ?? [];
   const agents: Agent[] = [];
   const groups = [];
@@ -176,5 +183,6 @@ export function fromRex(view: SessionView, reports: ReadonlyMap<string, BlockRep
     groups,
     layouts,
     label: view.label === undefined || view.label === "" ? undefined : view.label,
+    lifetime: new Map([[INSTANCE_KEY, instanceId]]),
   };
 }

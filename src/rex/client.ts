@@ -175,13 +175,19 @@ export function openRexSocket(socketPath: string): ControlSocket {
 interface Connection {
   readonly socket: ControlSocket;
   readonly book: Correlator;
-  /** Resolves once the handshake and the attach are done. */
-  readonly ready: Promise<void>;
+  /** Resolves, with the server's `instance_id`, once the handshake, attach and status read are done. */
+  readonly ready: Promise<string>;
 }
 
 /** The part of the client the poll needs. */
 export interface Requester {
   request(method: string, payload: object): Promise<unknown>;
+}
+
+/** What the poll needs: requests, and the lifetime marker its connection read. */
+export interface Pollable extends Requester {
+  /** The `instance_id` the current connection read when it opened. */
+  instanceId(): Promise<string>;
 }
 
 /**
@@ -193,12 +199,13 @@ export interface Requester {
  * retained rejects instead of reopening it, so a poll still in flight when the
  * last tile goes cannot bring it back. A connection that closes under a live
  * tile is not repaired here: every request in flight rejects, and the next poll
- * opens a new one, paced by the core's backoff.
+ * opens a new one, paced by the core's backoff. Each new connection reads the
+ * server's `instance_id`, the lifetime marker (`instanceId`).
  *
  * Events are neither buffered nor applied; the attach is `event_scope:
  * "session"` and the client polls.
  */
-export class RexControl implements Requester {
+export class RexControl implements Pollable {
   private conn: Connection | null = null;
   private retained = 0;
 
@@ -232,6 +239,11 @@ export class RexControl implements Requester {
     return this.send(conn, method, payload);
   }
 
+  async instanceId(): Promise<string> {
+    if (this.retained === 0) throw new RexError("closed", "no Rex tile is visible");
+    return (this.conn ?? this.connect()).ready;
+  }
+
   private send(conn: Connection, method: string, payload: object): Promise<unknown> {
     const { id, frame, result } = conn.book.open(method, payload);
     const timer = setTimeout(
@@ -254,7 +266,7 @@ export class RexControl implements Requester {
     const socket = this.open();
     const book = new Correlator();
     let gone: (err: Error) => void = () => {};
-    const ready = new Promise<void>((resolve, reject) => {
+    const ready = new Promise<string>((resolve, reject) => {
       const timer = setTimeout(
         () => gone(new RexError("timeout", "Rex did not complete the handshake in time")),
         this.timeoutMs,
@@ -295,10 +307,20 @@ export class RexControl implements Requester {
         welcomed = true;
         // A session can only be named once attached, and this attaches to all
         // of them, which is enough for `session.view` and for block methods.
-        this.send(conn, "session.attach_all", { event_scope: "session" }).then(() => {
-          clearTimeout(timer);
-          resolve();
-        }, gone);
+        // The status is read on every connect, never cached across them: a
+        // restart always drops the connection first, so a new connection is
+        // where a new `instance_id` shows.
+        this.send(conn, "session.attach_all", { event_scope: "session" })
+          .then(() => this.send(conn, "server.status", {}))
+          .then((status) => {
+            const id = (status as { instance_id?: unknown } | null)?.instance_id;
+            if (typeof id !== "string" || id === "") {
+              throw new RexError("invalid_response", "server.status returned no instance_id");
+            }
+            clearTimeout(timer);
+            resolve(id);
+          })
+          .catch(gone);
       });
       socket.on("error", (err: Error) => gone(err));
       socket.on("close", () => gone(new RexError("closed", "Rex closed the connection")));

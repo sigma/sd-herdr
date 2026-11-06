@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { HERDR } from "../herdr/backend.js";
 import { REX } from "../rex/backend.js";
+import { fromRex } from "../rex/convert.js";
 import { fixture } from "../testing/fixtures.js";
+import { rexWire } from "../testing/rex-fixtures.js";
 import { attentionSet } from "./attention.js";
 import type { Backend } from "./backend.js";
 import {
@@ -927,5 +929,49 @@ describe("a backend's constants", () => {
     expect(face(initial("s", "key", QUIET)).nameplate).toBe("quiet");
     const live = drive([APPEAR, snapshotAt(2000, "blocked-one")], quiet());
     expect(face(live.state).nameplate).toBe("s");
+  });
+});
+
+describe("a Rex server restart", () => {
+  const rex = () => initial("session:abc", "session:abc", REX);
+  const rexSnapshotAt = (at: number, instanceId: string, empty = false): CoreEvent => {
+    const { view, reports } = rexWire("split-tab");
+    return {
+      type: "snapshotTaken",
+      at,
+      snapshot: fromRex(view, empty ? new Map() : reports, instanceId),
+    };
+  };
+  const press = (at: number): CoreEvent[] => [
+    { type: "pressed", at },
+    { type: "focusResult", at: at + 10, ok: true },
+  ];
+  const focused = (effects: readonly Effect[]) =>
+    effects.flatMap((e) => (e.type === "focusPane" ? [e.paneId] : []));
+
+  it("resets the visited set on a changed instance_id, with no grey hold", () => {
+    const before = drive([APPEAR, rexSnapshotAt(2000, "A"), ...press(2100)], rex());
+    const walked = drive([rexSnapshotAt(2200, "A"), ...press(2300)], before.state);
+    const restarted = drive([rexSnapshotAt(2400, "B"), ...press(2500)], walked.state);
+    const [first, second] = focused([...before.effects, ...walked.effects]);
+    expect(second).not.toBe(first);
+    // The walk had moved on; after the restart it starts again from the top.
+    expect(focused(restarted.effects)).toEqual([first]);
+    expect(face(drive([rexSnapshotAt(2600, "B")], restarted.state).state).stateColour).toBe("red");
+  });
+
+  it("goes dark at once when the restart took every agent", () => {
+    const { state } = drive(
+      [APPEAR, rexSnapshotAt(2000, "A"), rexSnapshotAt(3000, "B", true)],
+      rex(),
+    );
+    expect(face(state).stateColour).toBe("dark");
+  });
+
+  it("resets nothing when the instance_id is unchanged after a reconnect", () => {
+    const before = drive([APPEAR, rexSnapshotAt(2000, "A"), ...press(2100)], rex());
+    const again = drive([rexSnapshotAt(2400, "A"), ...press(2500)], before.state);
+    const [first] = focused(before.effects);
+    expect(focused(again.effects)).not.toContain(first);
   });
 });

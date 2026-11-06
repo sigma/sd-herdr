@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { rexWire } from "../testing/rex-fixtures.js";
-import { type Requester, RexError } from "./client.js";
+import { type Pollable, RexError } from "./client.js";
+import { INSTANCE_KEY } from "./convert.js";
 import { decodeReport, decodeView, pollSession, terminalBlockIds } from "./poll.js";
 
 const S = "session:fixture";
@@ -9,10 +10,14 @@ const S = "session:fixture";
 function serverFor(
   name: Parameters<typeof rexWire>[0],
   fail?: (method: string) => RexError | null,
+  instanceId = "inst-1",
 ) {
   const { view, reports } = rexWire(name);
   const calls: { method: string; payload: Record<string, unknown> }[] = [];
-  const client: Requester = {
+  const client: Pollable = {
+    async instanceId() {
+      return instanceId;
+    },
     async request(method, payload) {
       calls.push({ method, payload: payload as Record<string, unknown> });
       const failure = fail?.(method);
@@ -44,6 +49,11 @@ describe("pollSession", () => {
     );
     for (const call of calls.slice(1)) expect(call.payload.session_id).toBe(S);
     expect(snapshot.agents.map((a) => a.paneId)).toEqual(["block:a1", "block:b1"]);
+  });
+
+  it("carries the connection's instance_id into the snapshot as the lifetime marker", async () => {
+    const { client } = serverFor("two-windows", undefined, "inst-9");
+    expect((await pollSession(client, S)).lifetime).toEqual(new Map([[INSTANCE_KEY, "inst-9"]]));
   });
 
   it("calls only terminal blocks", () => {

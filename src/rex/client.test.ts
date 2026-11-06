@@ -170,7 +170,7 @@ function harness() {
 }
 
 /** Walk a fresh socket through hello, welcome and attach. */
-async function handshake(socket: FakeSocket): Promise<void> {
+async function handshake(socket: FakeSocket, instanceId = "inst-1"): Promise<void> {
   socket.emit("open");
   await settle();
   expect(socket.sent[0]).toMatchObject({ type: "hello", api_revision: 11, api_min_revision: 11 });
@@ -182,6 +182,9 @@ async function handshake(socket: FakeSocket): Promise<void> {
     payload: { event_scope: "session" },
   });
   socket.answer({});
+  await settle();
+  expect(socket.sent[2]).toMatchObject({ type: "request", method: "server.status" });
+  socket.answer({ instance_id: instanceId });
   await settle();
 }
 
@@ -201,7 +204,7 @@ describe("RexControl", () => {
     expect(socket.sent).toHaveLength(0); // nothing is sent before the socket opens
 
     await handshake(socket);
-    expect(socket.sent[2]).toMatchObject({ method: "session.view", payload: { session_id: "s" } });
+    expect(socket.sent[3]).toMatchObject({ method: "session.view", payload: { session_id: "s" } });
     socket.answer({ revision: 1 });
     expect(await result).toEqual({ revision: 1 });
   });
@@ -214,7 +217,7 @@ describe("RexControl", () => {
     expect(sockets).toHaveLength(1);
     await handshake(sockets[0] as FakeSocket);
     const socket = sockets[0] as FakeSocket;
-    const ids = socket.sent.slice(2).map((m) => m.id);
+    const ids = socket.sent.slice(3).map((m) => m.id);
     socket.say({ type: "response", id: ids[1], payload: "b" });
     socket.say({ type: "response", id: ids[0], payload: "a" });
     expect(await a).toBe("a");
@@ -227,7 +230,7 @@ describe("RexControl", () => {
     const result = control.request("session.view", {});
     const socket = sockets[0] as FakeSocket;
     await handshake(socket);
-    const id = socket.sent[2]?.id;
+    const id = socket.sent[3]?.id;
     socket.say({ type: "response", id, error: { code: "session_not_found", message: "x" } });
     await expect(result).rejects.toMatchObject({ code: "session_not_found" });
   });
@@ -287,6 +290,52 @@ describe("RexControl", () => {
     await handshake(sockets[1] as FakeSocket);
     (sockets[1] as FakeSocket).answer("back");
     expect(await again).toBe("back");
+  });
+
+  it("reads instance_id on each connect, and a reconnect picks up the new one", async () => {
+    const { control, sockets } = harness();
+    control.retain();
+    const first = control.instanceId();
+    await handshake(sockets[0] as FakeSocket, "inst-1");
+    expect(await first).toBe("inst-1");
+    // Asking again on the same connection reads nothing more.
+    expect(await control.instanceId()).toBe("inst-1");
+    expect(
+      (sockets[0] as FakeSocket).sent.filter((m) => m.method === "server.status"),
+    ).toHaveLength(1);
+
+    // The server restarts: the connection drops, the next one finds a new id.
+    (sockets[0] as FakeSocket).emit("close", 1001);
+    const second = control.instanceId();
+    await handshake(sockets[1] as FakeSocket, "inst-2");
+    expect(await second).toBe("inst-2");
+  });
+
+  it("reports the same instance_id after a reconnect to the same server", async () => {
+    const { control, sockets } = harness();
+    control.retain();
+    const first = control.instanceId();
+    await handshake(sockets[0] as FakeSocket, "inst-1");
+    await first;
+    (sockets[0] as FakeSocket).emit("close", 1006);
+    const again = control.instanceId();
+    await handshake(sockets[1] as FakeSocket, "inst-1");
+    expect(await again).toBe("inst-1");
+  });
+
+  it("gives up on a status with no instance_id", async () => {
+    const { control, sockets } = harness();
+    control.retain();
+    const pending = control.instanceId();
+    const socket = sockets[0] as FakeSocket;
+    socket.emit("open");
+    await settle();
+    socket.say({ type: "welcome" });
+    await settle();
+    socket.answer({});
+    await settle();
+    socket.answer({});
+    await expect(pending).rejects.toMatchObject({ code: "invalid_response" });
   });
 
   it("rejects the request when the connection fails to open", async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { attentionSet } from "../core/attention.js";
 import { bodyFor, paneIndex } from "../core/body.js";
+import { isRestart, lifetimeOf } from "../core/lifetime.js";
 import { rexFixture, rexWire } from "../testing/rex-fixtures.js";
 import { defaultWindowLabel, fromRex } from "./convert.js";
 
@@ -80,15 +81,16 @@ describe("fromRex: agents", () => {
 
   it("skips a block that is in the view but has no report, as a non-terminal block", () => {
     const { view } = rexWire("two-windows");
-    expect(fromRex(view, new Map()).agents).toEqual([]);
+    expect(fromRex(view, new Map(), "i").agents).toEqual([]);
   });
 
   it("survives a view with no windows", () => {
-    expect(fromRex({}, new Map())).toEqual({
+    expect(fromRex({}, new Map(), "i")).toEqual({
       agents: [],
       groups: [],
       layouts: [],
       label: undefined,
+      lifetime: new Map([["instance", "i"]]),
     });
   });
 });
@@ -121,7 +123,7 @@ describe("fromRex: the body label rule", () => {
         w.window_id === "window:two-aaaaaaa1" ? { ...w, label: "Window bbbbbbb2" } : w,
       ),
     };
-    const groups = fromRex(renamed, reports).groups;
+    const groups = fromRex(renamed, reports, "i").groups;
     expect(groups?.find((g) => g.groupId === "window:two-aaaaaaa1")?.label).toBe("Window bbbbbbb2");
   });
 
@@ -183,6 +185,20 @@ describe("fromRex: the plate", () => {
   });
 
   it("leaves it absent when the view has none", () => {
-    expect(fromRex({ label: "" }, new Map()).label).toBeUndefined();
+    expect(fromRex({ label: "" }, new Map(), "i").label).toBeUndefined();
+  });
+});
+
+describe("fromRex: the lifetime marker", () => {
+  const { view, reports } = rexWire("two-windows");
+  const marker = (id: string) => lifetimeOf(fromRex(view, reports, id));
+
+  it("carries the instance_id under one key, and a changed one reads as a restart", () => {
+    expect([...marker("A")]).toEqual([["instance", "A"]]);
+    expect(isRestart(marker("A"), marker("B"))).toBe(true);
+  });
+
+  it("reads an unchanged one as no restart", () => {
+    expect(isRestart(marker("A"), marker("A"))).toBe(false);
   });
 });

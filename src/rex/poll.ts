@@ -7,7 +7,7 @@
  * snapshot: grey after the staleness deadline, with backoff in between.
  */
 import type { Snapshot } from "../core/snapshot.js";
-import { type Requester, RexError } from "./client.js";
+import { type Pollable, RexError } from "./client.js";
 import { fromRex } from "./convert.js";
 import {
   type BlockReport,
@@ -49,10 +49,13 @@ export function terminalBlockIds(view: SessionView): string[] {
 }
 
 /** Take one snapshot of one Rex session. */
-export async function pollSession(client: Requester, sessionId: string): Promise<Snapshot> {
+export async function pollSession(client: Pollable, sessionId: string): Promise<Snapshot> {
   // A tile with no session chosen has nothing to ask about; it stays grey.
   if (sessionId === "") throw new RexError("no_session", "no Rex session is configured");
 
+  // Before the view: if the server restarts in between, the view is the newer
+  // and the next poll's id shows the change, where the reverse would hide it.
+  const instanceId = await client.instanceId();
   const view = decodeView(await client.request("session.view", { session_id: sessionId }));
   const reports = await Promise.all(
     terminalBlockIds(view).map(async (blockId): Promise<[string, BlockReport]> => {
@@ -64,5 +67,5 @@ export async function pollSession(client: Requester, sessionId: string): Promise
       return [blockId, decodeReport(status, title)];
     }),
   );
-  return fromRex(view, new Map(reports));
+  return fromRex(view, new Map(reports), instanceId);
 }
