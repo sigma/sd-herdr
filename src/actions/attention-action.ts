@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import streamDeck, {
   action,
   type DidReceiveSettingsEvent,
@@ -17,6 +18,10 @@ import { fromHerdr } from "../herdr/convert.js";
 import { clientSocketPathFor, DEFAULT_SESSION, socketPathFor } from "../herdr/session.js";
 import { describeRaise } from "../raise/ladder.js";
 import { raise } from "../raise/spawn.js";
+import { REX } from "../rex/backend.js";
+import { openRexSocket, RexControl } from "../rex/client.js";
+import { pollSession } from "../rex/poll.js";
+import { rexSocketPath } from "../rex/session.js";
 
 /**
  * The terminal the raise ladder falls back to when it cannot name the one
@@ -30,10 +35,14 @@ import { raise } from "../raise/spawn.js";
  */
 const DEFAULT_HOST_APP = "com.mitchellh.ghostty";
 
-/** What a button remembers. Both settings are per-button; the poll loop is not. */
+/** What a button remembers. The settings are per-button; the poll loop is not. */
 interface ButtonSettings {
+  /** `rex` for Rex; anything else, or nothing, is herdr, so an existing key is unchanged. */
+  readonly backend?: string;
   readonly sessionName?: string;
   readonly hostAppBundleId?: string;
+  /** Rex only: the `session_id` the tile speaks for. */
+  readonly sessionId?: string;
   /** The SDK stores settings as free JSON; this says so without importing its type. */
   readonly [key: string]: string | undefined;
 }
@@ -50,10 +59,21 @@ function configured(value: string | undefined, fallback: string): string {
   return trimmed === "" ? fallback : trimmed;
 }
 
+/** The clock and the log, which are the same whichever backend a hub speaks for. */
+const environment = {
+  now: () => Date.now(),
+  report: (message: string) => streamDeck.logger.warn(message),
+  schedule: (ms: number, fn: () => void) => {
+    const handle = setTimeout(fn, ms);
+    return { cancel: () => clearTimeout(handle) };
+  },
+};
+
 /**
- * The one hub for the whole plugin, and so the one place a poll loop can be
- * shared. Module-level rather than per-action-instance because sharing is by
- * *socket path*: two keys pointed at one session share a loop wherever they sit.
+ * The herdr hub, and so the one place a herdr poll loop can be shared.
+ * Module-level rather than per-action-instance because sharing is by *socket
+ * path*: two keys pointed at one session share a loop wherever they sit. A hub
+ * takes one backend's adapters, so Rex has a hub of its own below.
  */
 const hub = new SessionHub({
   backend: HERDR,
@@ -77,13 +97,60 @@ const hub = new SessionHub({
     await clearWindowTitle(socketPath);
   },
   focusPane,
-  now: () => Date.now(),
-  report: (message) => streamDeck.logger.warn(message),
-  schedule: (ms, fn) => {
-    const handle = setTimeout(fn, ms);
-    return { cancel: () => clearTimeout(handle) };
-  },
+  ...environment,
 });
+
+/**
+ * The one control connection to the Rex server, shared by every Rex tile. It
+ * connects only while a tile has retained it, and the hello's version is read
+ * when it first connects, which is after the SDK has registered.
+ */
+const rexControl = new RexControl(
+  () => openRexSocket(rexSocketPath(homedir())),
+  () => streamDeck.info.plugin.version,
+);
+
+/**
+ * The Rex hub. Its session key is the `session_id`, so two tiles on one session
+ * share one poll loop here as two herdr tiles do, and every loop shares
+ * `rexControl`.
+ */
+const rexHub = new SessionHub({
+  backend: REX,
+  snapshot: (sessionId) => pollSession(rexControl, sessionId),
+  // A record of which Rex this tile talked to, as for herdr. A tile with no
+  // session chosen has nothing retained and nothing to ask.
+  ping: async (sessionId) => {
+    if (sessionId === "") return;
+    const status = (await rexControl.request("server.status", {})) as { api_revision?: unknown };
+    streamDeck.logger.info(`rex, api revision ${String(status.api_revision)}`);
+  },
+  // Nothing is written into a window title on Rex (`marksWindow` is false), so
+  // the core never emits these.
+  setTitle: async () => {},
+  clearTitle: async () => {},
+  // The Rex press (focus the block, show its tab, bring Rex forward) is #39; a
+  // press does nothing yet.
+  focusPane: async () => {},
+  ...environment,
+});
+
+/** Which session a key speaks for, on which backend. */
+type Target =
+  | { readonly backend: "herdr"; readonly sessionName: string }
+  | { readonly backend: "rex"; readonly sessionId: string };
+
+function targetOf(settings: ButtonSettings): Target {
+  if (settings.backend === "rex") {
+    return { backend: "rex", sessionId: settings.sessionId?.trim() ?? "" };
+  }
+  return { backend: "herdr", sessionName: configured(settings.sessionName, DEFAULT_SESSION) };
+}
+
+/** Equal targets are the same session; this is what "already pointed there" compares. */
+function targetKey(target: Target): string {
+  return target.backend === "rex" ? `rex:${target.sessionId}` : `herdr:${target.sessionName}`;
+}
 
 /**
  * The attention button: one tile per herdr session, red while any agent in it
@@ -96,29 +163,23 @@ const hub = new SessionHub({
  */
 @action({ UUID: "dev.yrh.sd-herdr.attention" })
 export class AttentionAction extends SingletonAction {
-  private readonly buttons = new Map<string, { membership: Membership; sessionName: string }>();
+  private readonly buttons = new Map<string, { membership: Membership; target: string }>();
 
   override onWillAppear(ev: WillAppearEvent): void {
     if (!ev.action.isKey()) return;
-    this.point(
-      ev.action,
-      configured((ev.payload.settings as ButtonSettings).sessionName, DEFAULT_SESSION),
-    );
+    this.point(ev.action, targetOf(ev.payload.settings as ButtonSettings));
   }
 
   /**
    * The property inspector wrote a setting.
    *
-   * Only the session name is acted on here: it is what the poll loop and the
-   * cycle are keyed on. `hostAppBundleId` is read at press time instead, so
+   * Only the backend and the session are acted on here: they are what the poll
+   * loop and the cycle are keyed on. `hostAppBundleId` is read at press time instead, so
    * changing it takes effect on the next press without disturbing anything.
    */
   override onDidReceiveSettings(ev: DidReceiveSettingsEvent): void {
     if (!ev.action.isKey()) return;
-    this.point(
-      ev.action,
-      configured((ev.payload.settings as ButtonSettings).sessionName, DEFAULT_SESSION),
-    );
+    this.point(ev.action, targetOf(ev.payload.settings as ButtonSettings));
   }
 
   override onKeyDown(ev: KeyDownEvent): void {
@@ -144,16 +205,48 @@ export class AttentionAction extends SingletonAction {
    * Rejoining unconditionally would restart the poll loop and reset the cycle
    * each time the button was pressed.
    */
-  private point(key: KeyAction, sessionName: string): void {
+  private point(key: KeyAction, target: Target): void {
+    const id = targetKey(target);
     const current = this.buttons.get(key.id);
-    if (current?.sessionName === sessionName) return;
-    current?.membership.leave();
+    if (current?.target === id) return;
 
-    const membership = hub.join(sessionName, socketPathFor(sessionName), {
+    const membership =
+      target.backend === "rex" ? this.joinRex(key, target.sessionId) : this.joinHerdr(key, target);
+    // Joined before the old one is left, so repointing a Rex tile at another
+    // session never drops the connection in between.
+    current?.membership.leave();
+    this.buttons.set(key.id, { membership, target: id });
+  }
+
+  private joinHerdr(key: KeyAction, target: { readonly sessionName: string }): Membership {
+    const { sessionName } = target;
+    return hub.join(sessionName, socketPathFor(sessionName), {
       paint: (face) => paint(key, face),
       raise: (nonce) => raiseFor(key, sessionName, nonce),
     });
-    this.buttons.set(key.id, { membership, sessionName });
+  }
+
+  /**
+   * A Rex tile retains the shared connection for as long as it is on a session,
+   * so the connection is open exactly while one is visible. A tile with no
+   * session chosen retains nothing: it is grey, and has no use for a server.
+   */
+  private joinRex(key: KeyAction, sessionId: string): Membership {
+    const release = sessionId === "" ? () => {} : rexControl.retain();
+    const membership = rexHub.join(sessionId, sessionId, {
+      paint: (face) => paint(key, face),
+      // The Rex press is #39; there is no raise yet.
+      raise: async () => {},
+    });
+    return {
+      // Not forwarded: with no focus or raise behind it, a press would only
+      // walk the cycle and move the body. #39 wires it.
+      press: () => {},
+      leave: () => {
+        membership.leave();
+        release();
+      },
+    };
   }
 }
 

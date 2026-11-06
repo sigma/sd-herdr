@@ -30,7 +30,7 @@ export const PIP_CAP = 4;
 export interface FaceDescriptor {
   /** The state colour, carried by the nameplate. */
   readonly stateColour: StateColour;
-  /** The nameplate's text: the session name, or `herdr` when it stands in. */
+  /** The nameplate's text: the session's label or name, or the backend's name when it stands in. */
   readonly nameplate: string;
   /** The body line — where the next press will take the user. */
   readonly body: string;

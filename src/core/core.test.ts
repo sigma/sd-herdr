@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { HERDR } from "../herdr/backend.js";
+import { REX } from "../rex/backend.js";
 import { fixture } from "../testing/fixtures.js";
 import { attentionSet } from "./attention.js";
 import type { Backend } from "./backend.js";
@@ -167,6 +168,29 @@ describe("face", () => {
 
   it("renders the default session as herdr, which is a name the user chose", () => {
     expect(faceAfter("blocked-one", "default").nameplate).toBe("herdr");
+  });
+
+  it("prefers the snapshot's own session label to the backend's plate", () => {
+    const labelled: CoreEvent = {
+      type: "snapshotTaken",
+      at: 2000,
+      snapshot: { ...fixture("blocked-one"), label: "quartermaster" },
+    };
+    const { state } = drive([APPEAR, labelled], initial("session:abc", "session:abc", REX));
+    expect(face(state).nameplate).toBe("quartermaster");
+  });
+
+  it("reads the backend's name on a grey face even when the last snapshot had a label", () => {
+    const labelled: CoreEvent = {
+      type: "snapshotTaken",
+      at: 2000,
+      snapshot: { ...fixture("blocked-one"), label: "quartermaster" },
+    };
+    const { state } = drive(
+      [APPEAR, labelled, tickAt(2000 + STALENESS_DEADLINE_MS)],
+      initial("session:abc", "session:abc", REX),
+    );
+    expect(face(state)).toMatchObject({ stateColour: "grey", nameplate: "rex" });
   });
 
   it("falls back to herdr while grey, because it cannot verify the name", () => {

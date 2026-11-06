@@ -62,6 +62,12 @@ export type LifetimeMarker = ReadonlyMap<string, string>;
 /** A session at one instant, as the core sees it. */
 export interface Snapshot {
   readonly agents: readonly Agent[];
+  /**
+   * The session's own label, for the nameplate. Absent when the backend does
+   * not carry one in its snapshot (herdr's plate comes from the setting
+   * instead); the face then asks the backend's `plateFor`.
+   */
+  readonly label?: string;
   /** Absent when the backend sent none; the body then names the group id. */
   readonly groups?: readonly GroupLabel[];
   /** Absent when the backend sent none; the body then carries no pane index. */

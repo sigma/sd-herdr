@@ -495,7 +495,9 @@ export function face(state: CoreState): FaceDescriptor {
 
   return {
     stateColour: colour,
-    nameplate: state.backend.plateFor(state.sessionName),
+    // The session's own label when the snapshot carries one: Rex relabels
+    // sessions by itself, so the setting cannot know the current name.
+    nameplate: state.snapshot?.label ?? state.backend.plateFor(state.sessionName),
     body: state.snapshot === null ? "" : bodyFor(state.snapshot, set, target),
     pips: others.slice(0, PIP_CAP).map((agent) => TIER_COLOUR[agent.status]),
     pipOverflow: others.length > PIP_CAP,

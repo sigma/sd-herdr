@@ -1,0 +1,127 @@
+{
+  "provenance": {
+    "kind": "derived",
+    "note": "HAND-DERIVED. One tab split into three: an agent on the left, and on the right a shell above a second agent. The layout is a tree of two splits, and `blocks` lists the right-hand agent first, so the pane index has to come from the layout's rects: left agent is index 1, shell 2, right-hand agent 3.",
+    "derivedFrom": "live-session.json (the captured session.view shape) and the program-status records in docs/research/rex-program-status.md"
+  },
+  "view": {
+    "revision": 1,
+    "session_id": "session:split-tab",
+    "label": "work",
+    "windows": [
+      {
+        "window_id": "window:split-ccccccc1",
+        "label": "review",
+        "focused_block_id": "block:c1",
+        "layers": [
+          {
+            "layer_id": "layer:tiled",
+            "kind": "tiled",
+            "bounds": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "layout": {
+              "rect": [
+                0,
+                0,
+                1,
+                1
+              ],
+              "split": {
+                "split_id": "split:horizontal",
+                "direction": "horizontal",
+                "ratio": 0.5,
+                "before": {
+                  "rect": [
+                    0,
+                    0,
+                    0.5,
+                    1
+                  ],
+                  "block_id": "block:c1"
+                },
+                "after": {
+                  "rect": [
+                    0.5,
+                    0,
+                    0.5,
+                    1
+                  ],
+                  "split": {
+                    "split_id": "split:vertical",
+                    "direction": "vertical",
+                    "ratio": 0.5,
+                    "before": {
+                      "rect": [
+                        0.5,
+                        0,
+                        0.5,
+                        0.5
+                      ],
+                      "block_id": "block:c2"
+                    },
+                    "after": {
+                      "rect": [
+                        0.5,
+                        0.5,
+                        0.5,
+                        0.5
+                      ],
+                      "block_id": "block:c3"
+                    }
+                  }
+                }
+              }
+            },
+            "blocks": [
+              {
+                "block_id": "block:c3",
+                "creator_name": "com.superlogical.terminal"
+              },
+              {
+                "block_id": "block:c1",
+                "creator_name": "com.superlogical.terminal"
+              },
+              {
+                "block_id": "block:c2",
+                "creator_name": "com.superlogical.terminal"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "active_window_id": "window:split-ccccccc1"
+  },
+  "reports": {
+    "block:c1": {
+      "records": [
+        {
+          "state": "blocked",
+          "updated_at": "2026-11-06T08:00:00+01:00",
+          "app": "claude-code",
+          "effective_app": "claude-code"
+        }
+      ],
+      "title": "left"
+    },
+    "block:c2": {
+      "records": [],
+      "title": "shell"
+    },
+    "block:c3": {
+      "records": [
+        {
+          "state": "blocked",
+          "updated_at": "2026-11-06T08:30:00+01:00",
+          "app": "claude-code",
+          "effective_app": "claude-code"
+        }
+      ],
+      "title": "right"
+    }
+  }
+}

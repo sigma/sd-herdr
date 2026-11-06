@@ -48,6 +48,25 @@ Derived fixtures carry only the fields their scenario exercises, and say so.
 | `snapshots/restart-empty.json` | derived | Every `terminal_id` rotated under a stable `pane_id`, and no agents — a server lifetime boundary. |
 | `snapshots/restart-redetected.json` | derived | The same boundary once a live handoff has re-detected its agents. |
 
+## The Rex corpus
+
+`rex/` holds the Rex backend's fixtures, each `{ "provenance", "view", "reports" }`: the
+`session.view` and, per terminal block, the `program_status` records and `title` the poll
+fetches, so the conversion is tested on exactly what it is handed. The same provenance rule
+applies, and the same test enforces it.
+
+| File | Kind | What it is for |
+|---|---|---|
+| `rex/live-session.json` | captured | A real session with one Claude Code agent, `done`, in an unnamed window. |
+| `rex/two-windows.json` | derived | A named window and an unnamed one, a blocked and a done agent. |
+| `rex/split-tab.json` | derived | `agent \| (shell / agent)` as a tree of splits, blocks listed out of geometric order. |
+| `rex/floating-layer.json` | derived | A tiled layer plus a floating one holding a blocked agent. |
+| `rex/nested-records.json` | derived | Root `idle` plus a child `blocked`, `error`, an unknown state, a non-agent record. |
+| `rex/unnamed-multi-agent.json` | derived | Unnamed windows with several agents: which title names the window. |
+
+The captured one is a session that happens to hold a `done` agent. As on herdr, `blocked` and
+`error` cannot be captured on demand.
+
 ## Adding one
 
 Capture where you can, derive where you must, and say which. If you derive a shape
