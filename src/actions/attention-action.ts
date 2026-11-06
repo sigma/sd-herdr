@@ -4,6 +4,7 @@ import streamDeck, {
   type DidReceiveSettingsEvent,
   type KeyAction,
   type KeyDownEvent,
+  type PropertyInspectorDidAppearEvent,
   SingletonAction,
   type WillAppearEvent,
   type WillDisappearEvent,
@@ -23,6 +24,7 @@ import { openRexSocket, RexControl } from "../rex/client.js";
 import { pollSession } from "../rex/poll.js";
 import { describePress, RexPress } from "../rex/press.js";
 import { rexSocketPath } from "../rex/session.js";
+import { LIST_REQUEST, listSessions, sessionsMessage } from "../rex/sessions.js";
 
 /**
  * The terminal the raise ladder falls back to when it cannot name the one
@@ -35,6 +37,9 @@ import { rexSocketPath } from "../rex/session.js";
  * wondering for months why the wrong window keeps coming forward.
  */
 const DEFAULT_HOST_APP = "com.mitchellh.ghostty";
+
+/** The inspector's message event; the SDK does not export its JSON types, so it is named from the base class. */
+type SendToPluginMessage = Parameters<NonNullable<SingletonAction["onSendToPlugin"]>>[0];
 
 /** What a button remembers. The settings are per-button; the poll loop is not. */
 interface ButtonSettings {
@@ -185,6 +190,26 @@ export class AttentionAction extends SingletonAction {
     this.point(ev.action, targetOf(ev.payload.settings as ButtonSettings));
   }
 
+  /**
+   * The inspector opened on a Rex tile: send it the live sessions. A herdr tile
+   * has no use for them; the inspector asks (below) if the user switches over.
+   */
+  override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent): Promise<void> {
+    const settings = await ev.action.getSettings<ButtonSettings>();
+    if (settings.backend === "rex") await sendSessions(settings.sessionId?.trim() ?? "");
+  }
+
+  /**
+   * The inspector asks for the list when the user picks the Rex backend, with
+   * the id it is showing: the setting it just wrote may not have reached
+   * `getSettings` yet.
+   */
+  override async onSendToPlugin(ev: SendToPluginMessage): Promise<void> {
+    const request = ev.payload as { event?: unknown; sessionId?: unknown } | null;
+    if (request?.event !== LIST_REQUEST) return;
+    await sendSessions(typeof request.sessionId === "string" ? request.sessionId.trim() : "");
+  }
+
   override onKeyDown(ev: KeyDownEvent): void {
     if (!ev.action.isKey()) return;
     this.buttons.get(ev.action.id)?.membership.press();
@@ -249,6 +274,18 @@ export class AttentionAction extends SingletonAction {
       },
     };
   }
+}
+
+/**
+ * List the Rex sessions and send them to the open inspector. The listing holds
+ * the control connection only while it runs (see `listSessions`), so it works
+ * with no Rex tile on the deck and leaves nothing open.
+ */
+async function sendSessions(stored: string): Promise<void> {
+  const list = await listSessions(rexControl, (err) =>
+    streamDeck.logger.debug(`session list failed: ${String(err)}`),
+  );
+  await streamDeck.ui.sendToPropertyInspector(sessionsMessage(list, stored));
 }
 
 /**

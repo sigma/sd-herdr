@@ -57,12 +57,13 @@
     <!-- Only the chosen backend's fields are shown. -->
     <div id="rex" hidden>
       <div class="row">
-        <label for="sessionId">Session id</label>
-        <input id="sessionId" type="text" placeholder="session:…" />
+        <label for="sessionId">Session</label>
+        <select id="sessionId"></select>
       </div>
       <p>
-        The Rex session this button speaks for, by its <code>session_id</code>
-        (see <code>rex ls --json</code>). Until one is set the tile stays grey.
+        The Rex session this button speaks for. The choice is stored by id, so
+        renaming the session in Rex keeps the tile. Until one is set, or if it
+        no longer exists, the tile stays grey.
       </p>
     </div>
 
@@ -98,7 +99,40 @@
       let uuid = null;
       let settings = {};
 
-      const fields = ["sessionName", "hostAppBundleId", "sessionId"];
+      const fields = ["sessionName", "hostAppBundleId"];
+      let action = null;
+
+      // The plugin owns the list (it holds the connection to Rex); this renders
+      // it. The stored id is always among the options the plugin sends, so
+      // rebuilding the select never replaces the selection.
+      function showSessions(message) {
+        const select = document.getElementById("sessionId");
+        select.replaceChildren(
+          ...message.options.map((o) => {
+            const option = document.createElement("option");
+            option.value = o.value;
+            option.textContent = o.text;
+            option.disabled = o.disabled === true;
+            return option;
+          })
+        );
+        select.value = message.selected;
+      }
+
+      function requestSessions() {
+        if (socket === null || socket.readyState !== WebSocket.OPEN) return;
+        socket.send(
+          JSON.stringify({
+            event: "sendToPlugin",
+            action,
+            context: uuid,
+            payload: {
+              event: "listRexSessions",
+              sessionId: settings.sessionId ?? "",
+            },
+          })
+        );
+      }
 
       // A missing backend is herdr, which is what every key placed before Rex
       // existed has.
@@ -114,6 +148,10 @@
       function save() {
         if (socket === null || socket.readyState !== WebSocket.OPEN) return;
         for (const id of fields) settings[id] = document.getElementById(id).value.trim();
+        // Until the plugin has sent the list the select is empty; the stored
+        // id is then left as it is rather than overwritten with nothing.
+        const sessions = document.getElementById("sessionId");
+        if (sessions.options.length > 0) settings.sessionId = sessions.value;
         settings.backend = backend();
         socket.send(
           JSON.stringify({ event: "setSettings", context: uuid, payload: settings })
@@ -126,9 +164,12 @@
         showBackend();
       }
 
+      document.getElementById("sessionId").addEventListener("change", save);
+
       document.getElementById("backend").addEventListener("change", () => {
         showBackend();
         save();
+        if (backend() === "rex") requestSessions();
       });
 
       for (const id of fields) {
@@ -140,13 +181,19 @@
 
       function connectElgatoStreamDeckSocket(port, inUUID, registerEvent, _info, actionInfo) {
         uuid = inUUID;
-        settings = JSON.parse(actionInfo).payload.settings ?? {};
+        const info = JSON.parse(actionInfo);
+        action = info.action;
+        settings = info.payload.settings ?? {};
         show();
 
         socket = new WebSocket(`ws://127.0.0.1:${port}`);
         socket.onopen = () => socket.send(JSON.stringify({ event: registerEvent, uuid: inUUID }));
         socket.onmessage = (message) => {
           const data = JSON.parse(message.data);
+          if (data.event === "sendToPropertyInspector") {
+            if (data.payload?.event === "rexSessions") showSessions(data.payload);
+            return;
+          }
           if (data.event !== "didReceiveSettings") return;
           settings = data.payload.settings ?? {};
           show();
