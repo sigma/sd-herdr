@@ -81,15 +81,14 @@ describe("fromRex: agents", () => {
 
   it("skips a block that is in the view but has no report, as a non-terminal block", () => {
     const { view } = rexWire("two-windows");
-    expect(fromRex(view, new Map(), "i").agents).toEqual([]);
+    expect(fromRex([view], new Map(), "i").agents).toEqual([]);
   });
 
   it("survives a view with no windows", () => {
-    expect(fromRex({}, new Map(), "i")).toEqual({
+    expect(fromRex([{}], new Map(), "i")).toEqual({
       agents: [],
       groups: [],
       layouts: [],
-      label: undefined,
       lifetime: new Map([["instance", "i"]]),
     });
   });
@@ -123,7 +122,7 @@ describe("fromRex: the body label rule", () => {
         w.window_id === "window:two-aaaaaaa1" ? { ...w, label: "Window bbbbbbb2" } : w,
       ),
     };
-    const groups = fromRex(renamed, reports, "i").groups;
+    const groups = fromRex([renamed], reports, "i").groups;
     expect(groups?.find((g) => g.groupId === "window:two-aaaaaaa1")?.label).toBe("Window bbbbbbb2");
   });
 
@@ -178,20 +177,27 @@ describe("fromRex: the pane index", () => {
   });
 });
 
-describe("fromRex: the plate", () => {
-  it("carries the session's label", () => {
-    expect(rexFixture("two-windows").label).toBe("work");
-    expect(rexFixture("live-session").label).toBe("nix");
-  });
-
-  it("leaves it absent when the view has none", () => {
-    expect(fromRex({ label: "" }, new Map(), "i").label).toBeUndefined();
+describe("fromRex: a whole server", () => {
+  it("lays every session's windows side by side and ranks their agents together", () => {
+    const one = rexWire("two-windows");
+    const two = rexWire("floating-layer");
+    const snapshot = fromRex([one.view, two.view], new Map([...one.reports, ...two.reports]), "i");
+    const windows = (name: Parameters<typeof rexWire>[0]) =>
+      (rexWire(name).view.windows ?? []).map((w) => w.window_id);
+    expect(snapshot.groups?.map((g) => g.groupId)).toEqual([
+      ...windows("two-windows"),
+      ...windows("floating-layer"),
+    ]);
+    expect(snapshot.agents).toEqual([
+      ...rexFixture("two-windows").agents,
+      ...rexFixture("floating-layer").agents,
+    ]);
   });
 });
 
 describe("fromRex: the lifetime marker", () => {
   const { view, reports } = rexWire("two-windows");
-  const marker = (id: string) => lifetimeOf(fromRex(view, reports, id));
+  const marker = (id: string) => lifetimeOf(fromRex([view], reports, id));
 
   it("carries the instance_id under one key, and a changed one reads as a restart", () => {
     expect([...marker("A")]).toEqual([["instance", "A"]]);

@@ -126,8 +126,13 @@ function leaves(node: LayoutNode | null | undefined): PaneOrigin[] {
 }
 
 /**
- * A Rex `session.view`, with the poll's per-block reports, into the core's
- * neutral snapshot. Pure.
+ * Every `session.view` of one Rex server, with the poll's per-block reports,
+ * into the core's neutral snapshot. Pure.
+ *
+ * A tile speaks for the whole server, so the sessions' windows are simply laid
+ * side by side: every id carries a UUID, so nothing collides
+ * (`docs/research/rex-control-api.md`), and
+ * `updated_at` is the server's one clock, so wait keys compare across sessions.
  *
  * `reports` is keyed by `block_id` and holds the terminal blocks only; a block
  * with no report is not a terminal and so not an agent. Detached blocks are not
@@ -146,11 +151,11 @@ function leaves(node: LayoutNode | null | undefined): PaneOrigin[] {
 export const INSTANCE_KEY = "instance";
 
 export function fromRex(
-  view: SessionView,
+  views: readonly SessionView[],
   reports: ReadonlyMap<string, BlockReport>,
   instanceId: string,
 ): Snapshot {
-  const windows = view.windows ?? [];
+  const windows = views.flatMap((view) => view.windows ?? []);
   const agents: Agent[] = [];
   const groups = [];
   const layouts: TabLayout[] = [];
@@ -182,7 +187,6 @@ export function fromRex(
     agents,
     groups,
     layouts,
-    label: view.label === undefined || view.label === "" ? undefined : view.label,
     lifetime: new Map([[INSTANCE_KEY, instanceId]]),
   };
 }

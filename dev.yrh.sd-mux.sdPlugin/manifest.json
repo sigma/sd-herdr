@@ -3,7 +3,7 @@
   "Name": "sd-mux",
   "Version": "0.1.0.0",
   "Author": "Yann Hodique",
-  "Description": "Surfaces whether any agent in a herdr or Rex session needs attention, and takes you to the most urgent one.",
+  "Description": "Surfaces whether any agent in a herdr session or a Rex server needs attention, and takes you to the most urgent one.",
   "Category": "sd-mux",
   "URL": "https://github.com/sigma/sd-mux",
   "Icon": "imgs/plugin/marketplace",

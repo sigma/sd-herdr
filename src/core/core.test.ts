@@ -172,27 +172,10 @@ describe("face", () => {
     expect(faceAfter("blocked-one", "default").nameplate).toBe("herdr");
   });
 
-  it("prefers the snapshot's own session label to the backend's plate", () => {
-    const labelled: CoreEvent = {
-      type: "snapshotTaken",
-      at: 2000,
-      snapshot: { ...fixture("blocked-one"), label: "quartermaster" },
-    };
-    const { state } = drive([APPEAR, labelled], initial("session:abc", "session:abc", REX));
-    expect(face(state).nameplate).toBe("quartermaster");
-  });
-
-  it("reads the backend's name on a grey face even when the last snapshot had a label", () => {
-    const labelled: CoreEvent = {
-      type: "snapshotTaken",
-      at: 2000,
-      snapshot: { ...fixture("blocked-one"), label: "quartermaster" },
-    };
-    const { state } = drive(
-      [APPEAR, labelled, tickAt(2000 + STALENESS_DEADLINE_MS)],
-      initial("session:abc", "session:abc", REX),
-    );
-    expect(face(state)).toMatchObject({ stateColour: "grey", nameplate: "rex" });
+  it("names a Rex tile after the backend, since it speaks for the whole server", () => {
+    const taken: CoreEvent = { type: "snapshotTaken", at: 2000, snapshot: fixture("blocked-one") };
+    const { state } = drive([APPEAR, taken], initial("rex", "/rex.sock", REX));
+    expect(face(state).nameplate).toBe("rex");
   });
 
   it("falls back to herdr while grey, because it cannot verify the name", () => {
@@ -621,7 +604,7 @@ describe("the press cycle", () => {
     // Rex keeps `done` until the agent's next turn, so each press is followed by
     // the same snapshot. The visited set alone must carry the walk: no rule is
     // special to `done`.
-    const rex = initial("session:abc", "session:abc", REX);
+    const rex = initial("rex", "/rex.sock", REX);
     const press = (at: number): CoreEvent[] => [
       pressAt(at),
       { type: "focusResult", at: at + 50, ok: true },
@@ -933,13 +916,13 @@ describe("a backend's constants", () => {
 });
 
 describe("a Rex server restart", () => {
-  const rex = () => initial("session:abc", "session:abc", REX);
+  const rex = () => initial("rex", "/rex.sock", REX);
   const rexSnapshotAt = (at: number, instanceId: string, empty = false): CoreEvent => {
     const { view, reports } = rexWire("split-tab");
     return {
       type: "snapshotTaken",
       at,
-      snapshot: fromRex(view, empty ? new Map() : reports, instanceId),
+      snapshot: fromRex([view], empty ? new Map() : reports, instanceId),
     };
   };
   const press = (at: number): CoreEvent[] => [

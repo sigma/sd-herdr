@@ -3,10 +3,11 @@
  * (`docs/research/rex-raise.md`).
  *
  * The first step is the core's `focusPane` effect and the other two are its
- * `raise`, which carries no target. So the window the focus aimed at is held
- * here between the two, per session, and taken by the raise that follows. A
- * press that focused nothing (empty set, grey tile, stale block) therefore
- * selects the session without a window.
+ * `raise`, which carries no target. A tile speaks for the whole server and the
+ * core names only the block, so the focus finds the session and window holding
+ * it, and holds them here for the raise that follows. A press that focused
+ * nothing (empty set, grey tile, stale block) selects nothing and only brings
+ * Rex forward.
  *
  * No policy lives here beyond choosing the app client; the client and `open`
  * are parameters so the payloads and the outcome mapping are tested without a
@@ -15,6 +16,7 @@
 import type { Requester } from "./client.js";
 import { RexError } from "./client.js";
 import { decodeView } from "./poll.js";
+import { decodeSessions } from "./sessions.js";
 import type { SessionView } from "./view.js";
 
 /** The Rex app, Rex Beta included. */
@@ -68,15 +70,12 @@ export function appClientId(payload: unknown): string | null {
   return typeof app?.client_id === "string" ? app.client_id : null;
 }
 
-/** The `client.perform` payload that makes the app show a session, and a tab if there is one. */
-export function selectPayload(clientId: string, sessionId: string, windowId: string | null) {
+/** The `client.perform` payload that makes the app show a session at one tab. */
+export function selectPayload(clientId: string, sessionId: string, windowId: string) {
   return {
     client_id: clientId,
     action: "session.select",
-    args:
-      windowId === null
-        ? { session_id: sessionId }
-        : { session_id: sessionId, window_id: windowId },
+    args: { session_id: sessionId, window_id: windowId },
     timeout_ms: SELECT_TIMEOUT_MS,
   };
 }
@@ -91,8 +90,14 @@ export function describePress(report: PressReport): string | null {
   return problems.length === 0 ? null : problems.join("; ");
 }
 
+/** Where a block lives: what `session.focus_block` and `session.select` need. */
+interface Place {
+  readonly sessionId: string;
+  readonly windowId: string;
+}
+
 export class RexPress {
-  private readonly aimed = new Map<string, string>();
+  private aimed: Place | null = null;
 
   constructor(
     private readonly client: Requester,
@@ -100,41 +105,72 @@ export class RexPress {
   ) {}
 
   /**
-   * Step 1. Rejects when the block is gone (`not_found`), which the runner
-   * turns into the core's failed focus. The window is looked up first, so a
-   * block that closed since the poll fails here without moving anything.
+   * The session and window holding `blockId`, from a fresh read of the server.
+   * A session that fails to read is passed over: an unrelated session timing
+   * out must not fail a press onto another. Only when no session holds the
+   * block does a failure count, since the block may have been in it.
    */
-  async focus(sessionId: string, blockId: string): Promise<void> {
-    this.aimed.delete(sessionId);
-    const view = decodeView(await this.client.request("session.view", { session_id: sessionId }));
-    const windowId = windowOf(view, blockId);
-    if (windowId === null) throw new RexError("not_found", `block ${blockId} is not in the view`);
-    await this.client.request("session.focus_block", { session_id: sessionId, block_id: blockId });
-    this.aimed.set(sessionId, windowId);
+  private async locate(blockId: string): Promise<Place | null> {
+    const sessions = decodeSessions(await this.client.request("session.list", {}));
+    const reads = await Promise.allSettled(
+      sessions.map(async ({ session_id: sessionId }): Promise<Place | null> => {
+        const view = decodeView(
+          await this.client.request("session.view", { session_id: sessionId }),
+        );
+        const windowId = windowOf(view, blockId);
+        return windowId === null ? null : { sessionId, windowId };
+      }),
+    );
+    for (const read of reads)
+      if (read.status === "fulfilled" && read.value !== null) return read.value;
+    const failure = reads.find(
+      (read): read is PromiseRejectedResult =>
+        read.status === "rejected" &&
+        !(read.reason instanceof RexError && read.reason.code === "session_not_found"),
+    );
+    if (failure !== undefined) throw failure.reason;
+    return null;
+  }
+
+  /**
+   * Step 1. Rejects when the block is gone (`not_found`), which the runner
+   * turns into the core's failed focus. The block is located first, so one that
+   * closed since the poll fails here without moving anything.
+   */
+  async focus(blockId: string): Promise<void> {
+    this.aimed = null;
+    const place = await this.locate(blockId);
+    if (place === null) throw new RexError("not_found", `block ${blockId} is on no session`);
+    await this.client.request("session.focus_block", {
+      session_id: place.sessionId,
+      block_id: blockId,
+    });
+    this.aimed = place;
   }
 
   /** Steps 2 and 3. Never throws; step 3 runs whatever step 2 did. */
-  async raise(sessionId: string): Promise<PressReport> {
-    const windowId = this.aimed.get(sessionId) ?? null;
-    this.aimed.delete(sessionId);
+  async raise(): Promise<PressReport> {
+    const place = this.aimed;
+    this.aimed = null;
 
     let select: PressReport["select"] = "skipped";
     let selectError: string | undefined;
-    // A tile with no session chosen has nothing to show: bring Rex forward and
-    // nothing more, rather than asking the server and alerting on its refusal.
-    if (sessionId === "") {
-      const opened = await this.open(REX_BUNDLE_ID).catch(() => false);
-      return { select, opened };
-    }
-    try {
-      const clientId = appClientId(await this.client.request("client.list", {}));
-      if (clientId !== null) {
-        await this.client.request("client.perform", selectPayload(clientId, sessionId, windowId));
-        select = "selected";
+    // Nothing was focused, so there is nothing to show: bring Rex forward and
+    // nothing more.
+    if (place !== null) {
+      try {
+        const clientId = appClientId(await this.client.request("client.list", {}));
+        if (clientId !== null) {
+          await this.client.request(
+            "client.perform",
+            selectPayload(clientId, place.sessionId, place.windowId),
+          );
+          select = "selected";
+        }
+      } catch (err) {
+        select = "failed";
+        selectError = err instanceof RexError ? err.code : String(err);
       }
-    } catch (err) {
-      select = "failed";
-      selectError = err instanceof RexError ? err.code : String(err);
     }
     const opened = await this.open(REX_BUNDLE_ID).catch(() => false);
     return { select, selectError, opened };

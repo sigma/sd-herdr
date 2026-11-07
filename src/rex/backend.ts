@@ -8,10 +8,8 @@ import type { Backend } from "../core/backend.js";
  * restart kills every agent and nothing comes back, so a dark tile afterwards is
  * the truth (`docs/research/rex-server-restart.md`).
  *
- * The session key is the `session_id` and nothing else, because there is one
- * local server. The plate is the session's label, which the snapshot carries
- * because Rex relabels sessions by itself; `plateFor` is only the fallback for a
- * view that has none.
+ * A tile speaks for the whole local server, every session in it, so the
+ * session key is the server's socket path and the plate is just `rex`.
  */
 export const REX: Backend = {
   name: "rex",

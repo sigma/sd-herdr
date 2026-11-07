@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Stream Deck attention button for a herdr or Rex session",
+  "description": "Stream Deck attention button for a herdr session or a Rex server",
   "packageManager": "pnpm@11.17.0",
   "scripts": {
     "build": "rollup -c",

@@ -1,7 +1,7 @@
 # sd-mux
 
 A Stream Deck button that surfaces whether any agent in a [herdr](https://github.com/ogulcancelik/herdr)
-session or a Rex session needs attention, and on press takes the user to the most urgent one. This
+session or a Rex server needs attention, and on press takes the user to the most urgent one. This
 glossary is the vocabulary the design decisions on
 [map #1](https://github.com/sigma/sd-herdr/issues/1) and
 [map #29](https://github.com/sigma/sd-herdr/issues/29) are argued in.
@@ -17,19 +17,20 @@ that says what the backend maps the term onto.
 A multiplexer the plugin speaks to: herdr or Rex. A tile speaks to one backend, for one session on
 it. The core reads four things about a backend and nothing else: the name it paints on grey
 (`name`), whether a press writes a window marker (`marksWindow`), how long a restart holds grey
-(`settleMs`), and the plate for a live session whose snapshot carries no label (`plateFor`).
+(`settleMs`), and the plate for a live session (`plateFor`).
 Everything else a backend does is an adapter the runner calls.
 _Avoid_: provider, driver.
 
 **Session**:
-The unit of work a tile watches: a herdr session, or a Rex session. One tile speaks for exactly one
-session — that is what keeps the face's single colour meaningful — so watching two sessions means two
-buttons.
+The unit of work a tile watches: a herdr session, or a whole Rex server with every session in it.
+One tile speaks for exactly one session — that is what keeps the face's single colour meaningful —
+so watching two herdr sessions means two buttons.
 
 **Session key**:
 The opaque string a backend looks a session up by. Only the backend can read it. herdr's is the
-socket path; Rex's is the `session_id`. Two tiles with equal keys are the same session, so they share
-one poll loop and one cycle (see **Poll loop**). Sharing follows the key, never the name a user typed.
+socket path; Rex's is the server's socket path, so every Rex tile has the same one. Two tiles with
+equal keys are the same session, so they share one poll loop and one cycle (see **Poll loop**).
+Sharing follows the key, never the name a user typed.
 _Avoid_: session name (the configured name is an input to the key, not the key).
 
 **Lifetime marker**:
@@ -182,9 +183,9 @@ not show.
 **Nameplate**:
 The state-coloured bar across the top of the tile, carrying the session's name. It **clips with an
 ellipsis** rather than shrinking to fit — a name shrunk to ~5px is unreadable, and so fails the tile's
-only job, while a legible prefix is enough to tell two sessions apart. The text is the session's label
-when the snapshot carries one, and otherwise the backend's `plateFor` (herdr: the configured session
-name, or `herdr` for `default`; Rex: `rex`). A grey tile always
+only job, while a legible prefix is enough to tell two sessions apart. The text is the backend's
+`plateFor` (herdr: the configured session name, or `herdr` for `default`; Rex: `rex`, since the tile
+speaks for the whole server). A grey tile always
 reads the backend's name (`herdr` or `rex`), whatever the session is called: it cannot verify the
 name, and the state colour, not the text, is what keeps grey apart. **Every** grey reads the same, including
 the `unknown`-only set, whose name a snapshot did in fact verify: grey is deliberately one state, and a
@@ -192,8 +193,7 @@ plate that varied by cause would split on the face what the colour joins.
 
 **Grey**:
 The single "cannot see anything" state — no reachable server or session, a stale snapshot past the 3 s
-deadline, an attention set of *only* `unknown` agents, the settling window, and a tile with no session
-configured (Rex, whose tiles have no default session). Deliberately *one*
+deadline, an attention set of *only* `unknown` agents, and the settling window. Deliberately *one*
 state, and never to be rendered as "all clear". `unknown` is not a colour of its own: "there are agents
 and I cannot tell what they are doing" is the same thing to a user as "I cannot see the session".
 _Avoid_: disconnected, offline, error (these imply a distinction the face does not make).
@@ -393,21 +393,20 @@ too; requiring the unix transport is meant to pass it over, but no such client h
 
 **Control connection**:
 The one long-lived `rex.control.v1` WebSocket the plugin holds to the Rex server, shared by every Rex
-tile. It opens on the first request while something holds it (a tile with a session chosen, or the
-inspector's session listing for the length of that request), and closes with a close frame when the
-last holder lets go, so the server holds no ghost client. A request with no holder is refused rather
-than reopening it. The plugin polls it; it does not apply the server's pushed events.
+tile. It opens on the first request while something holds it (a Rex tile on the deck), and closes
+with a close frame when the last holder lets go, so the server holds no ghost client. A request with
+no holder is refused rather than reopening it. The plugin polls it; it does not apply the server's
+pushed events.
 
-**Session id**:
-A Rex session's identity, and the Rex session key. The API documents that it never changes and is never
-reused, and it survives a server restart. A Rex tile's setting stores it.
-_Avoid_: session name, label.
-
-**Session label**:
-The name Rex shows for a session. Rex changes it on its own, and two sessions can share one. The plate
-shows it, and the setting never stores it.
+**Rex session**:
+One of the server's sessions, identified by its `session_id`, which the API documents never changes,
+is never reused, and survives a server restart. A tile does not pick one: each poll lists them all
+and merges their windows, and a press finds the session holding the agent's block before focusing
+it. Every id carries a UUID (`session:…`, `window:…`, `block:…`), so merging needs no renaming.
+_Avoid_: session, unqualified (the neutral **Session** is the whole server here).
 
 **Displayed session**:
 The session the Rex app is showing. The API reports none, and no field, event or action tracks it, so
-the plugin cannot follow it: a Rex tile has to be configured by session id.
+the plugin cannot follow it. It does not need to: a tile watches every session, and a press tells the
+app which session and window to show.
 _Avoid_: current session, active session (the server's active window is not the window the app shows).

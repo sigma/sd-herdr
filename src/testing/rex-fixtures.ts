@@ -47,7 +47,7 @@ export function rexWire(name: RexFixtureName): {
 /** A fixture converted into what the core reads. */
 export function rexFixture(name: RexFixtureName): Snapshot {
   const { view, reports } = rexWire(name);
-  return fromRex(view, reports, "instance:fixture");
+  return fromRex([view], reports, "instance:fixture");
 }
 
 export function rexProvenance(name: RexFixtureName): Provenance {

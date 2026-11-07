@@ -28,10 +28,15 @@ against a neutral snapshot. Each backend supplies:
 - a pure conversion from its own wire format to that snapshot;
 - a client and a press, which are the edge;
 - a `Backend` record: the name it paints on grey, whether a press writes a window marker, how long a
-  restart holds grey, and the plate for a session whose snapshot carries no label.
+  restart holds grey, and the plate for a session.
 
 There is one Stream Deck action, and a tile's backend is a setting beside its session; the **Terminal
 app** setting is herdr-only. The differences live behind that seam, not in a fork of the plugin.
+
+**Amended:** a Rex tile speaks for the whole local Rex server, every session in it, not for one Rex
+session. The core's "session" is the unit a tile watches, and on Rex that unit is the server. The
+core lost `Snapshot.label`, which existed only to put a Rex session's label on the plate, and
+nothing else in it changed. A Rex tile has no session setting, and its plate is `rex`.
 
 ## Alternatives considered
 

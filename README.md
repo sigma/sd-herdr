@@ -1,7 +1,7 @@
 # sd-mux
 
 A Stream Deck button that surfaces whether any agent in a
-[herdr](https://github.com/ogulcancelik/herdr) session or a Rex session needs attention,
+[herdr](https://github.com/ogulcancelik/herdr) session or a Rex server needs attention,
 and on press walks you through them, one press per agent.
 
 The herdr design is specified in [#17](https://github.com/sigma/sd-herdr/issues/17). The
@@ -51,9 +51,8 @@ Rex needs the Rex server running, the Rex app connected to it, and one setting.
 - **The Rex app**, connected to that server. The press uses the app to show the agent's tab;
   see [On Rex](#on-rex). With no app connected the press still focuses the agent on the
   server and runs `open -b`, and what that shows is not tested.
-- **A session, chosen in the inspector.** Set **Backend** to Rex and pick the session from
-  the list. An unconfigured Rex tile stays grey, because the plugin cannot tell which session
-  the app is showing ([why](docs/research/rex-displayed-session.md)).
+- **Nothing to choose.** Set **Backend** to Rex. The tile speaks for the whole local server:
+  every agent in every one of its sessions.
 
 ### Settings
 
@@ -64,12 +63,12 @@ Each button has a **Backend**, and then the fields for that backend. All are opt
 | **Backend** (`backend`) | — | herdr | herdr or Rex (stored as `rex`). Any other value, or none, is herdr, so a key placed before Rex existed is herdr. |
 | **Session** (`sessionName`) | herdr | `default` | The herdr session this button speaks for. |
 | **Terminal app** (`hostAppBundleId`) | herdr | `com.mitchellh.ghostty` | Bundle id of the terminal hosting that session. Used **only** as the last-resort input to the raise. |
-| **Session** (`sessionId`) | Rex | none | The Rex session this button speaks for, picked from the live sessions. Stored by `session_id`. |
 
-**One tile speaks for exactly one session**, on either backend — that is what keeps a single
-colour meaningful. Watching a second session means a second button, and the two operate
-independently. Two buttons pointed at the *same* session cost one poll, not two, and share
-one walk through the attention set: they are two views of the same cycle.
+**One tile speaks for exactly one herdr session, or for the whole Rex server** — one colour
+for one place to look. Watching a second herdr session means a second button, and the two
+operate independently. Two buttons pointed at the *same* session, or two Rex buttons, cost one
+poll, not two, and share one walk through the attention set: they are two views of the same
+cycle.
 
 **herdr.** Renaming the session re-resolves the socket and resets the cycle. A session that
 is not running renders exactly the same grey as an unreachable socket — one "cannot see
@@ -81,18 +80,8 @@ running a supported window manager. Because a wrong value there produces a confi
 wrong raise, its use is never silent: the key flashes on every press that falls back to it
 (see [On herdr](#on-herdr)).
 
-**Rex.** The session list comes from the Rex server. The inspector asks for it when it opens
-on a Rex tile and when you switch **Backend** to Rex, and holds the connection only for that
-request. Sessions are listed by label; where two share a label, the list adds the id to tell
-them apart, and a session with no label is listed by its id. The stored choice is always shown,
-so a server that is down does not make the tile forget it: a session that is gone reads
-`missing session (<id>)`, and with Rex down the choice reads `<id> (Rex is not running)`. With
-nothing stored, the list opens on `Choose a session…`, or says `No Rex sessions` or
-`Rex is not running`.
-
-**The Rex choice is stored by id, not label.** Rex renames sessions on its own, and labels are
-not unique, so a tile that followed a label would drift or pick up the wrong session. Renaming
-a session in Rex keeps its tile.
+**Rex.** A Rex tile has no settings of its own. Each poll lists the server's sessions and reads
+them all, so a session opened or closed in Rex joins or leaves the tile on the next poll.
 
 ## The face
 
@@ -126,13 +115,12 @@ a lighter grey as a milder problem. Failures back off to a 5 s ceiling and recov
 grey clears itself when the session comes back.
 
 **The plate's text names the session.** On herdr it is the session name, clipped with an
-ellipsis rather than shrunk to fit — a name at 5px is unreadable, and so fails the tile's
-only job. A session named `default` renders **`herdr`**, since `default` is herdr's
-placeholder rather than a name anyone chose. On Rex it is the session's label. Rex may change
-that label itself, so the plate can change without you touching anything; a Rex session with
-no label renders **`rex`**. A grey tile always reads its backend's name, `herdr` or `rex`,
-whatever the session is called: grey is one state, and a plate that varied by cause would split
-on the face what the colour joins.
+ellipsis rather than shrunk to fit — a name at 5px is unreadable, and so fails the tile's only
+job. A session named `default` renders **`herdr`**, since `default` is herdr's placeholder
+rather than a name anyone chose. On Rex it is always **`rex`**: the tile speaks for the whole
+server, which has no name of its own. A grey tile always reads its backend's name, `herdr` or
+`rex`, whatever the session is called: grey is one state, and a plate that varied by cause
+would split on the face what the colour joins.
 
 **The body names where the *next press* goes** — not the most urgent agent. Those differ,
 and the body deliberately follows the button: focusing a `blocked` agent consumes nothing,
@@ -185,8 +173,7 @@ session going away, and a detected server restart. There is deliberately no idle
 
 Pressing while grey focuses nothing, deliberately: the tile has already said it does not trust
 its data, so it will not act on it. A dark tile has nothing to focus either. On herdr either
-press still runs the raise and nothing else. On Rex it still asks the app to show the session,
-without a window, and brings Rex forward.
+press still runs the raise and nothing else. On Rex it only brings Rex forward.
 
 ### On herdr
 
@@ -207,10 +194,11 @@ A Rex press is three steps: two on the plugin's existing control connection, the
 None needs a permission grant, and none marks a window: there is no nonce to write or clear
 ([research](docs/research/rex-raise.md)).
 
-1. **Focus** the agent's block on the server. The plugin reads the session's view to find the
-   window holding the block, then calls `session.focus_block`; the window is remembered for
-   step 2. A block that closed since the poll fails here, the tile re-reads the snapshot, and
-   steps 2 and 3 still run, without a window.
+1. **Focus** the agent's block on the server. The tile speaks for the whole server, so the
+   plugin lists the sessions and reads their views to find the session and window holding the
+   block, then calls `session.focus_block`; both are remembered for step 2. A block that closed
+   since the poll fails here, the tile re-reads the snapshot, step 2 is skipped, and step 3
+   still runs.
 2. **Select** the session and that window on the local Rex app: the connected client of kind
    `app` on the unix socket, found with `client.list`, is sent `client.perform` with action
    `session.select`. This is what shows the agent's tab: the server's own active window does
@@ -219,14 +207,14 @@ None needs a permission grant, and none marks a window: there is no nonce to wri
 
 **The key flashes on a Rex press only when step 2 fails** (listing the clients or the select
 returns an error, including the app not answering within the 2 s the select allows it) **or
-step 3 fails.** So a grey press while the server is down flashes, since step 2 cannot be sent,
-and still opens Rex. A skipped step 2 does not flash, so a press with no app connected focuses
-the agent and opens Rex without showing its tab, and nothing on the key says so. That is the
-one place the Rex press is silent about a shortfall.
+step 3 fails.** A skipped step 2 does not flash. A press that focused nothing, grey or dark,
+skips it, and so does a press with no app connected, which focuses the agent and opens Rex
+without showing its tab while nothing on the key says so. That is the one place the Rex press
+is silent about a shortfall.
 
-A press onto a Rex agent in a window other than the one the app shows changes the app's tab to
-that window's. Several Rex windows were not tested: which window the select drives, and whether
-`open -b` fronts that one.
+A press onto a Rex agent in a session or window other than the one the app shows switches the
+app to that session and that window's tab. Several Rex windows were not tested: which window
+the select drives, and whether `open -b` fronts that one.
 
 ## Accepted costs
 
@@ -296,10 +284,13 @@ but nothing comes back, so an agent that was `done` and unseen at the restart is
 and the tile goes dark. That dark is honest, and there is no repopulation to hold grey through
 ([restart](docs/research/rex-server-restart.md)).
 
-**A Rex tile must be configured, and it cannot follow the session the app is showing.** The
-Rex API reports no displayed session, so a tile with no session chosen stays grey rather than
-guessing one ([displayed session](docs/research/rex-displayed-session.md)). The choice is stored
-by id, so it survives renames, but the tile cannot be pointed at "whatever I am looking at".
+**A Rex tile watches only the local default server.** It always uses
+`~/Library/Application Support/rex/server.sock`; a second server on another socket cannot be
+watched. Within that server there is no narrowing: a tile cannot be pointed at one session.
+
+**The Rex body does not name the session.** It names the window, as it would within one
+session, so two windows called `claude` in two sessions read the same. The press still lands on
+the right one; only the label is ambiguous.
 
 ## The Automation prompt (herdr)
 
@@ -441,10 +432,10 @@ the Automation prompt's rendered wording — the residual `[U]`s in
 
 ### Rex
 
-3. **First paint.** A key set to Rex with no session chosen is grey. Choose a session with no
-   agents and it goes dark. Rename the session in Rex: the plate follows the new label and the
-   tile stays on the same session.
-4. **Socket and handshake.** After the first session is chosen, `just logs` shows the
+3. **First paint.** A key set to Rex with no agent in any session is dark, and its plate reads
+   `rex`. Make an agent blocked in one session and the tile turns red; make another blocked in a
+   second session and the tile cycles through both.
+4. **Socket and handshake.** Once the first Rex key is placed, `just logs` shows the
    `rex, api revision N` line the plugin writes once it has connected. The plugin does not log
    the path it used, so confirm that `rex server status` reports
    `~/Library/Application Support/rex/server.sock`, the path the plugin derives, and that the
@@ -452,10 +443,10 @@ the Automation prompt's rendered wording — the residual `[U]`s in
 5. **The tracer bullet.** Make an agent block `blocked` (Claude Code asking a question does this)
    and time the red paint from the logged `face` line. Answer it and time the amber. Let the turn
    end and time the green. Each should land on the next poll, plus the round trip.
-6. **The press lands on the agent.** Put the agent in a window other than the one the Rex app is
-   showing, and press. The app should switch to that window's tab, Rex should come forward, and
-   the agent should be where typing goes. The last part is not verified: the research did not
-   check where typed input lands.
+6. **The press lands on the agent.** Put the agent in a session other than the one the Rex app
+   is showing, and press. The app should switch to that session and that window's tab, Rex
+   should come forward, and the agent should be where typing goes. The last part is not
+   verified: the research did not check where typed input lands.
 7. **No Automation prompt.** Throughout step 6, no macOS dialog appears, and System Settings ›
    Privacy & Security › Automation gains no row from the press.
 8. **Green lasts.** Press onto a `done` agent. The tile stays green and the body moves on, and

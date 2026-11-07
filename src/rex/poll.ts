@@ -1,14 +1,19 @@
 /**
- * One Rex poll: `session.view`, then for every terminal block its program
- * status and its title, concurrently.
+ * One Rex poll: the server's sessions, then each session's `session.view`, then
+ * for every terminal block its program status and its title, concurrently.
  *
- * Any failure rejects the whole snapshot. A destroyed session (`session_not_found`)
- * and a closed connection both end up where the core already puts a failed
- * snapshot: grey after the staleness deadline, with backoff in between.
+ * A tile speaks for the whole server, so every session is read and the views
+ * are merged. Churn during the read is not a failure: a session destroyed
+ * after the list (`session_not_found`) is skipped, and a block closed after the
+ * view (`not_found`) is dropped, as if the read had been taken a moment later.
+ * Otherwise one closing tab anywhere would fail every Rex tile's poll. Any
+ * other failure rejects the whole snapshot, which the core already handles:
+ * grey after the staleness deadline, with backoff in between.
  */
 import type { Snapshot } from "../core/snapshot.js";
 import { type Pollable, RexError } from "./client.js";
 import { fromRex } from "./convert.js";
+import { decodeSessions } from "./sessions.js";
 import {
   type BlockReport,
   PROGRAM_STATUS_METHOD,
@@ -48,24 +53,59 @@ export function terminalBlockIds(view: SessionView): string[] {
     .map((block) => block.block_id);
 }
 
-/** Take one snapshot of one Rex session. */
-export async function pollSession(client: Pollable, sessionId: string): Promise<Snapshot> {
-  // A tile with no session chosen has nothing to ask about; it stays grey.
-  if (sessionId === "") throw new RexError("no_session", "no Rex session is configured");
+const isCode = (err: unknown, code: string) => err instanceof RexError && err.code === code;
 
-  // Before the view: if the server restarts in between, the view is the newer
-  // and the next poll's id shows the change, where the reverse would hide it.
+/** Gone since it was listed. */
+class SessionGone extends Error {}
+
+/** One block's report; null when the block closed since the view. */
+async function readBlock(
+  client: Pollable,
+  sessionId: string,
+  blockId: string,
+): Promise<[string, BlockReport] | null> {
+  const args = { session_id: sessionId, block_id: blockId };
+  try {
+    const [status, title] = await Promise.all([
+      client.request(PROGRAM_STATUS_METHOD, args),
+      client.request(TITLE_METHOD, args),
+    ]);
+    return [blockId, decodeReport(status, title)];
+  } catch (err) {
+    if (isCode(err, "not_found")) return null;
+    if (isCode(err, "session_not_found")) throw new SessionGone();
+    throw err;
+  }
+}
+
+/** One session's view and its blocks' reports; null when the session is gone. */
+async function readSession(
+  client: Pollable,
+  sessionId: string,
+): Promise<{ view: SessionView; reports: [string, BlockReport][] } | null> {
+  try {
+    const view = decodeView(await client.request("session.view", { session_id: sessionId }));
+    const reports = await Promise.all(
+      terminalBlockIds(view).map((blockId) => readBlock(client, sessionId, blockId)),
+    );
+    return { view, reports: reports.filter((r) => r !== null) };
+  } catch (err) {
+    if (err instanceof SessionGone || isCode(err, "session_not_found")) return null;
+    throw err;
+  }
+}
+
+/** Take one snapshot of the whole Rex server. */
+export async function pollServer(client: Pollable): Promise<Snapshot> {
+  // Before the views: if the server restarts in between, the views are the
+  // newer and the next poll's id shows the change, where the reverse would hide it.
   const instanceId = await client.instanceId();
-  const view = decodeView(await client.request("session.view", { session_id: sessionId }));
-  const reports = await Promise.all(
-    terminalBlockIds(view).map(async (blockId): Promise<[string, BlockReport]> => {
-      const args = { session_id: sessionId, block_id: blockId };
-      const [status, title] = await Promise.all([
-        client.request(PROGRAM_STATUS_METHOD, args),
-        client.request(TITLE_METHOD, args),
-      ]);
-      return [blockId, decodeReport(status, title)];
-    }),
+  const sessions = decodeSessions(await client.request("session.list", {}));
+  const read = await Promise.all(sessions.map((s) => readSession(client, s.session_id)));
+  const live = read.filter((r) => r !== null);
+  return fromRex(
+    live.map((r) => r.view),
+    new Map(live.flatMap((r) => r.reports)),
+    instanceId,
   );
-  return fromRex(view, new Map(reports), instanceId);
 }

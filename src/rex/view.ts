@@ -51,7 +51,6 @@ export interface ViewWindow {
 
 /** A `session.view` result. */
 export interface SessionView {
-  readonly label?: string;
   readonly windows?: readonly ViewWindow[] | null;
 }
 
