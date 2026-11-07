@@ -600,21 +600,57 @@ describe("the press cycle", () => {
     expect(focused(effects)).toEqual(["w3:p1"]);
   });
 
-  it("on Rex, walks done targets that stay in the set once each, revisiting the first only after the wrap", () => {
+  describe("shown done reports, for Rex, which holds done on the server", () => {
     // Rex keeps `done` until the agent's next turn, so each press is followed by
-    // the same snapshot. The visited set alone must carry the walk: no rule is
-    // special to `done`.
-    const rex = initial("rex", "/rex.sock", REX);
-    const press = (at: number): CoreEvent[] => [
+    // the same snapshot. The press's shown mark is what takes the agent out.
+    const rex = () => initial("rex", "/rex.sock", REX);
+    /** Where the next press would go. */
+    const pressTargetOf = (state: CoreState) =>
+      focused(reduce(state, pressAt(state.at + 1)).effects)[0];
+    const press = (at: number, ok = true): CoreEvent[] => [
       pressAt(at),
-      { type: "focusResult", at: at + 50, ok: true },
+      { type: "focusResult", at: at + 50, ok },
       snapshotAt(at + 80, "done-pair"),
     ];
-    const { effects } = drive(
-      [APPEAR, snapshotAt(2000, "done-pair"), ...[2100, 2300, 2500, 2700].flatMap(press)],
-      rex,
-    );
-    expect(focused(effects)).toEqual(["w0:p1", "w0:p2", "w1:p1", "w0:p1"]);
+    /** The `done-pair` snapshot with every agent having reported again. */
+    const reported = (at: number): CoreEvent => ({
+      type: "snapshotTaken",
+      at,
+      snapshot: {
+        ...fixture("done-pair"),
+        agents: fixture("done-pair").agents.map((a) => ({ ...a, waitKey: a.waitKey + 1000 })),
+      },
+    });
+
+    it("takes each done agent out once a press has shown it, until the tile is dark", () => {
+      const { state, effects } = drive(
+        [
+          APPEAR,
+          snapshotAt(2000, "done-pair"),
+          ...[2100, 2300, 2500, 2700].flatMap((at) => press(at)),
+        ],
+        rex(),
+      );
+      expect(focused(effects)).toEqual(["w0:p1", "w0:p2", "w1:p1"]);
+      expect(face(state).stateColour).toBe("dark");
+    });
+
+    it("gives the mark back when the focus failed", () => {
+      const { state } = drive(
+        [APPEAR, snapshotAt(2000, "done-pair"), ...press(2100, false)],
+        rex(),
+      );
+      expect(face(state).pips).toHaveLength(attentionSet(fixture("done-pair").agents).length - 1);
+      expect(pressTargetOf(state)).toBe("w0:p1");
+    });
+
+    it("brings an agent back when it reports done again", () => {
+      const { state } = drive(
+        [APPEAR, snapshotAt(2000, "done-pair"), ...press(2100), reported(2300)],
+        rex(),
+      );
+      expect(pressTargetOf(state)).toBe("w0:p1");
+    });
   });
 
   it("consumes every done agent in the tab it lands in, leaving the second unreachable", () => {
@@ -633,7 +669,8 @@ describe("the press cycle", () => {
       pressAt(2500),
     ]);
     expect(focused(effects)).not.toContain("w0:p2");
-    expect(focused(effects)).toEqual(["w0:p1", "w1:p1", "w1:p1"]);
+    // The second press shows w1:p1 and so consumes it: the third has nothing left.
+    expect(focused(effects)).toEqual(["w0:p1", "w1:p1"]);
   });
 });
 

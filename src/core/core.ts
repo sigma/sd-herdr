@@ -174,6 +174,21 @@ export interface CoreState {
    */
   readonly aimedAt: string | null;
   /**
+   * The `done` reports a press has shown the user, as pane → the wait key of
+   * the report it showed. A `done` agent whose current report is in here has
+   * been shown and leaves the attention set, until it reports again (a new wait
+   * key) or the server restarts.
+   *
+   * herdr keeps this itself (focusing a pane marks it `seen`, and a seen idle
+   * agent is not `done`), so there the entry only hides the agent until the
+   * next snapshot says the same thing. Rex keeps a seen mark only in its app,
+   * out of the API's reach, and holds `done` on the server until the agent's
+   * next turn; there the entry is the only thing that clears the tile. A focus
+   * the user makes in the Rex app itself is invisible to the plugin and clears
+   * nothing (`docs/research/rex-program-status.md` §6).
+   */
+  readonly shown: ReadonlyMap<string, number>;
+  /**
    * The last snapshot's lifetime marker — the whole of what the core remembers
    * about the server lifetime it is talking to.
    */
@@ -191,6 +206,9 @@ export interface CoreState {
 /** One shared empty set, so an untouched cycle allocates nothing. */
 const NO_PANES: ReadonlySet<string> = new Set();
 
+/** The same, for the shown marks. */
+const NO_SHOWN: ReadonlyMap<string, number> = new Map();
+
 /** The same, for a core that has not seen a snapshot yet. */
 const NO_LIFETIME: LifetimeMarker = new Map();
 
@@ -207,10 +225,29 @@ export function initial(sessionName: string, sessionKey: string, backend: Backen
     presses: 0,
     visited: NO_PANES,
     aimedAt: null,
+    shown: NO_SHOWN,
     lifetime: NO_LIFETIME,
     settlingUntil: 0,
     at: 0,
   };
+}
+
+/**
+ * The shown marks that still describe a report on screen: the pane is there,
+ * still `done`, with the same wait key. Anything else has moved on, and a mark
+ * left behind would hide the agent's *next* `done`.
+ */
+function settleShown(
+  shown: ReadonlyMap<string, number>,
+  snapshot: Snapshot,
+): ReadonlyMap<string, number> {
+  if (shown.size === 0) return shown;
+  const kept = [...shown].filter(([paneId, waitKey]) =>
+    snapshot.agents.some(
+      (agent) => agent.paneId === paneId && agent.status === "done" && agent.waitKey === waitKey,
+    ),
+  );
+  return kept.length === 0 ? NO_SHOWN : new Map(kept);
 }
 
 /**
@@ -236,9 +273,12 @@ function settle(
   return pruned.size === live.size ? NO_PANES : pruned;
 }
 
-/** The attention set of the snapshot in hand, in priority order. */
+/** The attention set of the snapshot in hand, in priority order, less the `done` reports already shown. */
 function ordered(state: CoreState): readonly AttentionAgent[] {
-  return state.snapshot === null ? [] : attentionSet(state.snapshot.agents);
+  if (state.snapshot === null) return [];
+  return attentionSet(state.snapshot.agents).filter(
+    (agent) => !(agent.status === "done" && state.shown.get(agent.paneId) === agent.seq),
+  );
 }
 
 /** Ask for a snapshot — but only while anyone is looking. */
@@ -325,13 +365,16 @@ export function reduce(
             settlingUntil: at + state.backend.settleMs,
             visited: NO_PANES,
             aimedAt: null,
+            shown: NO_SHOWN,
           },
           effects: [{ type: "ping", sessionKey: next.sessionKey }, ...schedulePoll(next)],
         };
       }
 
+      const shown = settleShown(state.shown, event.snapshot);
+      const settled = { ...next, lifetime, shown };
       return {
-        state: { ...next, lifetime, visited: settle(state.visited, ordered(next)) },
+        state: { ...settled, visited: settle(state.visited, ordered(settled)) },
         effects: schedulePoll(next),
       };
     }
@@ -369,12 +412,21 @@ export function reduce(
       // A press that aimed at nothing leaves the cycle where it was: there is
       // no visit to record, and a grey face means the plugin does not trust
       // what it knows well enough to spend a step of the cycle on it.
+      //
+      // A press onto a `done` agent shows the user its result, so the report is
+      // marked shown and leaves the set, as herdr's own `seen` flag would.
+      const aimed = ordered(stepped).find((agent) => agent.paneId === target);
+      const shown =
+        aimed?.status === "done"
+          ? new Map([...stepped.shown, [aimed.paneId, aimed.seq]])
+          : stepped.shown;
+      const marked = { ...stepped, shown };
       const next =
         target === null
           ? stepped
           : {
-              ...stepped,
-              visited: settle(new Set([...stepped.visited, target]), ordered(stepped)),
+              ...marked,
+              visited: settle(new Set([...stepped.visited, target]), ordered(marked)),
               aimedAt: target,
             };
       return {
@@ -406,12 +458,15 @@ export function reduce(
       // A focus that failed also gives its visit back: the cycle records where
       // a press *took* the user, and this one took them nowhere. If the pane
       // died the next snapshot prunes it anyway; if it did not, the next press
-      // tries it again.
-      const visited =
-        event.ok || state.aimedAt === null
-          ? state.visited
-          : new Set([...state.visited].filter((paneId) => paneId !== state.aimedAt));
-      const next = { ...state, visited, aimedAt: null, at };
+      // tries it again. Its shown mark goes the same way: the user saw nothing.
+      const failed = !event.ok && state.aimedAt !== null;
+      const visited = failed
+        ? new Set([...state.visited].filter((paneId) => paneId !== state.aimedAt))
+        : state.visited;
+      const shown = failed
+        ? new Map([...state.shown].filter(([paneId]) => paneId !== state.aimedAt))
+        : state.shown;
+      const next = { ...state, visited, shown, aimedAt: null, at };
       return { state: next, effects: probe(next) };
     }
 
@@ -526,6 +581,6 @@ function stateColour(state: CoreState): StateColour {
   // urgent thing in the session and its tier is the colour. Reading the colour
   // off the same ordering the press cycle uses keeps one table in charge of
   // both, rather than a second cascade that has to be kept in step with it.
-  const head = attentionSet(state.snapshot.agents)[0];
+  const head = ordered(state)[0];
   return head === undefined ? "dark" : TIER_COLOUR[head.status];
 }

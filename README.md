@@ -144,8 +144,8 @@ only thing you can check it against. On Rex it counts every block of the window'
 agent or shell, in the same `(y, x)` order. A floating block sits over the tab and is not
 counted: it is still attention, and colours the tile and the pips, but as a target its body is
 the bare window label. The index blinks — consume the sibling and the body goes back to a bare
-label. A Rex press consumes nothing, so there the index stays until the sibling leaves the
-attention set (goes `idle` or closes).
+label. A Rex press consumes only the `done` agent it lands on, so a sibling that is `blocked`
+keeps the index until it leaves the attention set (goes `idle` or closes).
 
 The window label on Rex is the name someone gave the window. A window nobody named, one whose
 label is empty or is still Rex's default (`Window` and the last eight characters of its id), is
@@ -269,14 +269,19 @@ move; only the window did not follow. The key flashes to say so.
 
 ### On Rex
 
-**Green lasts until the agent's next turn.** A press does not consume `done`. Rex keeps a
-`done` record until the program reports again; focusing the block, pressing keys into it, or
-showing the session changes nothing ([program status](docs/research/rex-program-status.md) §1).
-So after a press onto a `done` agent the tile stays green, and the body moves on to the next
-agent. The cycle walks each `done` agent once and then wraps, the same way it walks `blocked`
-ones. The green clears when the agent starts its next turn. The Rex app may hide its own done
-markers once they have been seen; that is not verified, and the tile follows the server, not the
-app ([§6](docs/research/rex-program-status.md#6-not-measured)).
+**Only a press from the deck clears a `done` agent.** Rex keeps a `done` record until the
+program reports again; focusing the block, pressing keys into it, or showing the session
+changes nothing on the server ([program status](docs/research/rex-program-status.md) §1). The
+Rex app hides its own blue dot once you focus the pane, but that mark lives in the app and
+nothing in the API reports it. So the plugin keeps its own: a press onto a `done` agent marks
+that report shown, and the agent leaves the tile as it would on herdr. The mark is the
+plugin's, so:
+
+- focusing a `done` agent in the Rex app, not from the deck, leaves the tile green until the
+  agent's next turn;
+- the mark is in memory, so a plugin restart, or every Rex key leaving the deck, brings the
+  green back;
+- a `done` report the agent makes again (a new turn that ends) shows again.
 
 **No `done` survives a Rex restart, and nor does any agent.** A Rex server restart kills the
 terminal processes and drops every program status record. Session, window and block ids survive,
@@ -449,8 +454,8 @@ the Automation prompt's rendered wording — the residual `[U]`s in
    verified: the research did not check where typed input lands.
 7. **No Automation prompt.** Throughout step 6, no macOS dialog appears, and System Settings ›
    Privacy & Security › Automation gains no row from the press.
-8. **Green lasts.** Press onto a `done` agent. The tile stays green and the body moves on, and
-   the green clears only at that agent's next turn.
+8. **A press clears `done`.** Press onto a `done` agent. It leaves the tile: dark if nothing
+   else waits. Focus a different `done` agent in the Rex app instead: the tile stays green.
 9. **No app connected.** Quit the Rex app and press. Record whether Rex opens, whether any tab
    shows, and whether the key flashes. The code says it will not flash here; this has not been
    run on a device.

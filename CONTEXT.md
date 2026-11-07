@@ -90,8 +90,8 @@ untouched for a whole cycle.
 **Tier**:
 One rank of the priority order. The tiers differ mechanically, not just in urgency. Focusing a
 `blocked` agent changes nothing. A `working` agent is not waiting on the user at all. Focusing a
-`done` agent consumes it on herdr (see **Derived done**), but not on Rex, where the visited set has to
-cover it. Ranks of the *raise ladder* are **rungs**, never tiers.
+`done` agent consumes it: on herdr by herdr's own flag (see **Derived done**), on Rex by the core's
+**shown mark**. Ranks of the *raise ladder* are **rungs**, never tiers.
 
 **Press**:
 One activation of the button. Its contract is *"put the cursor in the most urgent agent"*: focus that
@@ -106,8 +106,16 @@ The record, per agent unit, of which attention agents this cycle has already sho
 agents still in the attention set — never reset on membership change — and cleared on wrap, on
 `willDisappear` of the last tile on the session, and on a detected server restart. It records every
 target whatever its tier, and it is what moves the cycle past the agents a press does not consume:
-`blocked` and `working` on both backends, and `done` on Rex.
+`blocked` and `working`.
 _Avoid_: seen (that is herdr's flag, with different scope and a different owner), read, ring cursor.
+
+**Shown mark**:
+The core's record that a press showed the user a `done` report: the pane, and the wait key of that
+report. A `done` agent whose current report is marked has left the attention set. The mark goes when
+the report does (the agent reports again, goes idle or closes), on a focus that failed, and on a
+detected restart. On herdr it only anticipates herdr's own `seen`; on Rex it is the only thing that
+clears `done`, since Rex keeps its seen mark in the app (see **Done held by Rex**).
+_Avoid_: seen (herdr's flag).
 
 **Stepping**:
 How selection advances press to press: per agent unit, over the visited set
@@ -373,8 +381,10 @@ _Avoid_: status (on its own, it names the core's agent status).
 Rex does not clear `done` on its own. Focusing the block, pressing keys into it, and showing the session
 change nothing; the record leaves `done` only when the program reports its next state, which Claude Code
 does when its next turn starts ([program status](docs/research/rex-program-status.md) §1). The plugin
-cannot clear it either: the terminal's methods do not write program status. So on Rex a press does not
-consume `done`, and the visited set has to cover that tier.
+cannot clear it either: the terminal's methods do not write program status. The Rex app clears its own
+blue dot when the pane is focused, and it stays cleared when the user switches away, so the app keeps a
+seen mark of its own; nothing in the API reports it. So the core's **shown mark** stands in for it, and
+only for presses made from the deck.
 
 **`instance_id`**:
 The Rex server's lifetime marker, `server.status.instance_id`. It is new on every start, and the plugin

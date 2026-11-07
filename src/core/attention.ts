@@ -13,8 +13,8 @@ export type AttentionStatus = "blocked" | "done" | "working" | "unknown";
  * "already looked at, no follow-up" — there is nothing left to walk to.
  *
  * The ranks differ mechanically, not merely in urgency: focusing a `done` agent
- * consumes it on herdr (Rex keeps `done` until the agent's next turn, and the
- * visited set walks it like any other), focusing a `blocked` agent changes
+ * consumes it (herdr's own `seen`, or on Rex the core's shown mark, since Rex
+ * keeps `done` until the agent's next turn), focusing a `blocked` agent changes
  * nothing, a `working` agent is not waiting on the user at all — it is
  * somewhere to *check on* rather than somewhere owed an answer — and an
  * `unknown` agent is one the plugin cannot speak for at all.
