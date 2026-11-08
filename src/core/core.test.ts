@@ -1,18 +1,26 @@
 import { describe, expect, it } from "vitest";
 
+import { HERDR } from "../herdr/backend.js";
+import { REX } from "../rex/backend.js";
+import { fromRex } from "../rex/convert.js";
 import { fixture } from "../testing/fixtures.js";
+import { rexWire } from "../testing/rex-fixtures.js";
 import { attentionSet } from "./attention.js";
+import type { Backend } from "./backend.js";
 import {
   type CoreEvent,
   type CoreState,
+  initial as coreInitial,
   type Effect,
   face,
-  initial,
   POLL_INTERVAL_MS,
   reduce,
-  SETTLE_WINDOW_MS,
   STALENESS_DEADLINE_MS,
 } from "./core.js";
+
+/** herdr is the only backend so far; the core is handed it like any other. */
+const initial = (sessionName: string, sessionKey: string, backend: Backend = HERDR) =>
+  coreInitial(sessionName, sessionKey, backend);
 
 /** Where the `default` session's socket lives, by herdr's path convention. */
 const SOCK = "/Users/dev/.config/herdr/herdr.sock";
@@ -164,6 +172,12 @@ describe("face", () => {
     expect(faceAfter("blocked-one", "default").nameplate).toBe("herdr");
   });
 
+  it("names a Rex tile after the backend, since it speaks for the whole server", () => {
+    const taken: CoreEvent = { type: "snapshotTaken", at: 2000, snapshot: fixture("blocked-one") };
+    const { state } = drive([APPEAR, taken], initial("rex", "/rex.sock", REX));
+    expect(face(state).nameplate).toBe("rex");
+  });
+
   it("falls back to herdr while grey, because it cannot verify the name", () => {
     expect(face(initial("work", SOCK)).nameplate).toBe("herdr");
   });
@@ -173,8 +187,8 @@ describe("reduce", () => {
   it("snapshots the session's socket as soon as the button appears", () => {
     expect(drive([APPEAR]).last).toEqual([
       // The startup ping, which names the server this loop will be talking to.
-      { type: "ping", socketPath: SOCK },
-      { type: "snapshot", socketPath: SOCK },
+      { type: "ping", sessionKey: SOCK },
+      { type: "snapshot", sessionKey: SOCK },
       { type: "tickAfter", ms: 500 },
     ]);
   });
@@ -190,7 +204,7 @@ describe("reduce", () => {
       snapshotAt(2000, "blocked-one"),
       { type: "pollDue", at: 3000 },
     ]);
-    expect(last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+    expect(last).toEqual([{ type: "snapshot", sessionKey: SOCK }]);
   });
 
   it("keeps asking on the poll cadence after a failure", () => {
@@ -200,7 +214,7 @@ describe("reduce", () => {
       { type: "snapshotFailed", at: 3000 },
       { type: "pollDue", at: 4000 },
     ]);
-    expect(last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+    expect(last).toEqual([{ type: "snapshot", sessionKey: SOCK }]);
   });
 
   it("greys out and keeps trying when the very first snapshot fails", () => {
@@ -235,8 +249,8 @@ describe("reduce", () => {
       { type: "appeared", at: 5000 },
     ]);
     expect(last).toEqual([
-      { type: "ping", socketPath: SOCK },
-      { type: "snapshot", socketPath: SOCK },
+      { type: "ping", sessionKey: SOCK },
+      { type: "snapshot", sessionKey: SOCK },
       { type: "tickAfter", ms: 500 },
     ]);
   });
@@ -392,14 +406,14 @@ describe("a press", () => {
   it("focuses the top-priority agent, not the first one herdr listed", () => {
     expect(press("mixed-tiers").last).toContainEqual({
       type: "focusPane",
-      socketPath: SOCK,
+      sessionKey: SOCK,
       paneId: "w3:p1",
     });
   });
 
   it("raises under the same nonce it wrote, so the raise can find the window", () => {
     const [set, , raise] = press("blocked-one").last;
-    expect(set).toEqual({ type: "setTitle", socketPath: SOCK, nonce: expect.any(String) });
+    expect(set).toEqual({ type: "setTitle", sessionKey: SOCK, nonce: expect.any(String) });
     expect(raise).toEqual({ type: "raise", nonce: (set as { nonce: string }).nonce });
   });
 
@@ -408,13 +422,13 @@ describe("a press", () => {
     // no_foreground_client — so the user has to recognise it and clear it by hand.
     const { last } = press("blocked-one", "work");
     const nonce = (last[0] as { nonce: string }).nonce;
-    expect(nonce).toBe("sd-herdr raise work #1");
+    expect(nonce).toBe("sd-mux raise work #1");
   });
 
   it("counts presses, so two in flight do not answer to the same title", () => {
     const { effects } = drive([APPEAR, snapshotAt(2000, "blocked-one"), PRESS, PRESS]);
     const nonces = effects.filter((e) => e.type === "raise").map((e) => e.nonce);
-    expect(nonces).toEqual(["sd-herdr raise default #1", "sd-herdr raise default #2"]);
+    expect(nonces).toEqual(["sd-mux raise default #1", "sd-mux raise default #2"]);
   });
 
   it("raises and focuses nothing when nothing is waiting", () => {
@@ -447,7 +461,7 @@ describe("a press", () => {
       PRESS,
       { type: "focusResult", at: 2600, ok: true },
     ]);
-    expect(last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+    expect(last).toEqual([{ type: "snapshot", sessionKey: SOCK }]);
   });
 
   it("re-snapshots and stops when the pane died between the poll and the press", () => {
@@ -459,7 +473,7 @@ describe("a press", () => {
       PRESS,
       { type: "focusResult", at: 2600, ok: false },
     ]);
-    expect(last).toEqual([{ type: "snapshot", socketPath: SOCK }]);
+    expect(last).toEqual([{ type: "snapshot", sessionKey: SOCK }]);
   });
 });
 
@@ -586,6 +600,59 @@ describe("the press cycle", () => {
     expect(focused(effects)).toEqual(["w3:p1"]);
   });
 
+  describe("shown done reports, for Rex, which holds done on the server", () => {
+    // Rex keeps `done` until the agent's next turn, so each press is followed by
+    // the same snapshot. The press's shown mark is what takes the agent out.
+    const rex = () => initial("rex", "/rex.sock", REX);
+    /** Where the next press would go. */
+    const pressTargetOf = (state: CoreState) =>
+      focused(reduce(state, pressAt(state.at + 1)).effects)[0];
+    const press = (at: number, ok = true): CoreEvent[] => [
+      pressAt(at),
+      { type: "focusResult", at: at + 50, ok },
+      snapshotAt(at + 80, "done-pair"),
+    ];
+    /** The `done-pair` snapshot with every agent having reported again. */
+    const reported = (at: number): CoreEvent => ({
+      type: "snapshotTaken",
+      at,
+      snapshot: {
+        ...fixture("done-pair"),
+        agents: fixture("done-pair").agents.map((a) => ({ ...a, waitKey: a.waitKey + 1000 })),
+      },
+    });
+
+    it("takes each done agent out once a press has shown it, until the tile is dark", () => {
+      const { state, effects } = drive(
+        [
+          APPEAR,
+          snapshotAt(2000, "done-pair"),
+          ...[2100, 2300, 2500, 2700].flatMap((at) => press(at)),
+        ],
+        rex(),
+      );
+      expect(focused(effects)).toEqual(["w0:p1", "w0:p2", "w1:p1"]);
+      expect(face(state).stateColour).toBe("dark");
+    });
+
+    it("gives the mark back when the focus failed", () => {
+      const { state } = drive(
+        [APPEAR, snapshotAt(2000, "done-pair"), ...press(2100, false)],
+        rex(),
+      );
+      expect(face(state).pips).toHaveLength(attentionSet(fixture("done-pair").agents).length - 1);
+      expect(pressTargetOf(state)).toBe("w0:p1");
+    });
+
+    it("brings an agent back when it reports done again", () => {
+      const { state } = drive(
+        [APPEAR, snapshotAt(2000, "done-pair"), ...press(2100), reported(2300)],
+        rex(),
+      );
+      expect(pressTargetOf(state)).toBe("w0:p1");
+    });
+  });
+
   it("consumes every done agent in the tab it lands in, leaving the second unreachable", () => {
     // Asserted as intended behaviour, not tolerated as a bug. Focusing any pane
     // calls herdr's mark_active_tab_seen(), which clears `seen` for every pane
@@ -602,7 +669,8 @@ describe("the press cycle", () => {
       pressAt(2500),
     ]);
     expect(focused(effects)).not.toContain("w0:p2");
-    expect(focused(effects)).toEqual(["w0:p1", "w1:p1", "w1:p1"]);
+    // The second press shows w1:p1 and so consumes it: the third has nothing left.
+    expect(focused(effects)).toEqual(["w0:p1", "w1:p1"]);
   });
 });
 
@@ -757,8 +825,8 @@ describe("settling after a server restart", () => {
   it("sizes the hold from its own constant, not the staleness deadline", () => {
     // Two deadlines answering two questions. Sharing one constant would make a
     // change to either a silent change to the other.
-    expect(SETTLE_WINDOW_MS).toBe(4000);
-    expect(SETTLE_WINDOW_MS).not.toBe(STALENESS_DEADLINE_MS);
+    expect(HERDR.settleMs).toBe(4000);
+    expect(HERDR.settleMs).not.toBe(STALENESS_DEADLINE_MS);
   });
 
   it("pings on the restart, and on nothing else in between", () => {
@@ -769,8 +837,8 @@ describe("settling after a server restart", () => {
     );
     // Two: the one at startup, and the one for the boundary. Never per poll.
     expect(effects.filter((e) => e.type === "ping")).toEqual([
-      { type: "ping", socketPath: SOCK },
-      { type: "ping", socketPath: SOCK },
+      { type: "ping", sessionKey: SOCK },
+      { type: "ping", sessionKey: SOCK },
     ]);
   });
 
@@ -814,5 +882,116 @@ describe("the heartbeat", () => {
   it("does not itself ask herdr for anything", () => {
     const { effects } = drive([APPEAR, snapshotAt(2000, "blocked-one"), tickAt(2500)]);
     expect(effects.filter((e) => e.type === "snapshot")).toHaveLength(1);
+  });
+});
+
+describe("a backend's constants", () => {
+  /** A backend with nothing herdr about it, to show the core reads only the constants. */
+  const QUIET: Backend = {
+    name: "quiet",
+    marksWindow: false,
+    settleMs: 0,
+    plateFor: (sessionName) => sessionName,
+  };
+  const quiet = () => initial("s", "key", QUIET);
+
+  it("emits no title effects when it does not mark the window", () => {
+    const { last } = drive(
+      [APPEAR, snapshotAt(2000, "blocked-one"), { type: "pressed", at: 2100 }],
+      quiet(),
+    );
+    expect(last.map((e) => e.type)).toEqual(["focusPane", "raise"]);
+  });
+
+  it("still raises when there is nothing to focus and no window to mark", () => {
+    const { last } = drive(
+      [APPEAR, snapshotAt(2000, "no-agents"), { type: "pressed", at: 2100 }],
+      quiet(),
+    );
+    expect(last.map((e) => e.type)).toEqual(["raise"]);
+  });
+
+  it("marks the window when the backend says to", () => {
+    const { last } = drive([
+      APPEAR,
+      snapshotAt(2000, "blocked-one"),
+      { type: "pressed", at: 2100 },
+    ]);
+    expect(last.map((e) => e.type)).toEqual(["setTitle", "focusPane", "raise", "clearTitle"]);
+  });
+
+  it("resets the visited set on a restart without holding the face grey when settleMs is 0", () => {
+    const { effects, state } = drive(
+      [
+        APPEAR,
+        snapshotAt(2000, "blocked-one"),
+        { type: "pressed", at: 2100 },
+        snapshotAt(3000, "restart-empty"),
+        // The same instant the restart is seen: a hold of any length would show here.
+        tickAt(3000),
+      ],
+      quiet(),
+    );
+    expect(face(state).stateColour).toBe("dark");
+
+    const again = drive(
+      [snapshotAt(3100, "restart-redetected"), { type: "pressed", at: 3200 }],
+      state,
+    );
+    // w0:p1 was visited before the boundary and is reachable again after it.
+    expect(
+      [...effects, ...again.effects].filter((e) => e.type === "focusPane").map((e) => e.paneId),
+    ).toEqual(["w0:p1", "w0:p1"]);
+    expect(face(again.state).stateColour).toBe("red");
+  });
+
+  it("takes its grey plate and its live plate from the backend", () => {
+    expect(face(initial("s", "key", QUIET)).nameplate).toBe("quiet");
+    const live = drive([APPEAR, snapshotAt(2000, "blocked-one")], quiet());
+    expect(face(live.state).nameplate).toBe("s");
+  });
+});
+
+describe("a Rex server restart", () => {
+  const rex = () => initial("rex", "/rex.sock", REX);
+  const rexSnapshotAt = (at: number, instanceId: string, empty = false): CoreEvent => {
+    const { view, reports } = rexWire("split-tab");
+    return {
+      type: "snapshotTaken",
+      at,
+      snapshot: fromRex([view], empty ? new Map() : reports, instanceId),
+    };
+  };
+  const press = (at: number): CoreEvent[] => [
+    { type: "pressed", at },
+    { type: "focusResult", at: at + 10, ok: true },
+  ];
+  const focused = (effects: readonly Effect[]) =>
+    effects.flatMap((e) => (e.type === "focusPane" ? [e.paneId] : []));
+
+  it("resets the visited set on a changed instance_id, with no grey hold", () => {
+    const before = drive([APPEAR, rexSnapshotAt(2000, "A"), ...press(2100)], rex());
+    const walked = drive([rexSnapshotAt(2200, "A"), ...press(2300)], before.state);
+    const restarted = drive([rexSnapshotAt(2400, "B"), ...press(2500)], walked.state);
+    const [first, second] = focused([...before.effects, ...walked.effects]);
+    expect(second).not.toBe(first);
+    // The walk had moved on; after the restart it starts again from the top.
+    expect(focused(restarted.effects)).toEqual([first]);
+    expect(face(drive([rexSnapshotAt(2600, "B")], restarted.state).state).stateColour).toBe("red");
+  });
+
+  it("goes dark at once when the restart took every agent", () => {
+    const { state } = drive(
+      [APPEAR, rexSnapshotAt(2000, "A"), rexSnapshotAt(3000, "B", true)],
+      rex(),
+    );
+    expect(face(state).stateColour).toBe("dark");
+  });
+
+  it("resets nothing when the instance_id is unchanged after a reconnect", () => {
+    const before = drive([APPEAR, rexSnapshotAt(2000, "A"), ...press(2100)], rex());
+    const again = drive([rexSnapshotAt(2400, "A"), ...press(2500)], before.state);
+    const [first] = focused(before.effects);
+    expect(focused(again.effects)).not.toContain(first);
   });
 });

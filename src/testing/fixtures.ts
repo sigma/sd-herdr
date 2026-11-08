@@ -7,6 +7,8 @@
  */
 import { readFileSync } from "node:fs";
 
+import type { Snapshot as NeutralSnapshot } from "../core/snapshot.js";
+import { fromHerdr } from "../herdr/convert.js";
 import type { Snapshot } from "../herdr/snapshot.js";
 
 /** Every fixture in the corpus, for tests that sweep the whole thing. */
@@ -61,9 +63,14 @@ function read(name: FixtureName): FixtureFile {
   return JSON.parse(readFileSync(path, "utf8")) as FixtureFile;
 }
 
-/** The snapshot held by a fixture. */
-export function fixture(name: FixtureName): Snapshot {
+/** The snapshot held by a fixture, as herdr sent it. */
+export function wireFixture(name: FixtureName): Snapshot {
   return read(name).snapshot;
+}
+
+/** The snapshot held by a fixture, converted into what the core reads. */
+export function fixture(name: FixtureName): NeutralSnapshot {
+  return fromHerdr(wireFixture(name));
 }
 
 /** A fixture's provenance block. */

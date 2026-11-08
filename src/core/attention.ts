@@ -2,7 +2,7 @@
  * The attention set: which agents the button is speaking for, in the order it
  * speaks for them.
  */
-import type { SnapshotAgent } from "../herdr/snapshot.js";
+import type { Agent } from "./snapshot.js";
 
 /** A status that puts an agent in the attention set. */
 export type AttentionStatus = "blocked" | "done" | "working" | "unknown";
@@ -13,10 +13,11 @@ export type AttentionStatus = "blocked" | "done" | "working" | "unknown";
  * "already looked at, no follow-up" — there is nothing left to walk to.
  *
  * The ranks differ mechanically, not merely in urgency: focusing a `done` agent
- * consumes it, focusing a `blocked` agent changes nothing, a `working` agent is
- * not waiting on the user at all — it is somewhere to *check on* rather than
- * somewhere owed an answer — and an `unknown` agent is one the plugin cannot
- * speak for at all.
+ * consumes it (herdr's own `seen`, or on Rex the core's shown mark, since Rex
+ * keeps `done` until the agent's next turn), focusing a `blocked` agent changes
+ * nothing, a `working` agent is not waiting on the user at all — it is
+ * somewhere to *check on* rather than somewhere owed an answer — and an
+ * `unknown` agent is one the plugin cannot speak for at all.
  */
 export const TIER: Record<AttentionStatus, number> = {
   blocked: 0,
@@ -29,42 +30,34 @@ export const TIER: Record<AttentionStatus, number> = {
 export interface AttentionAgent {
   readonly paneId: string;
   readonly tabId: string;
-  readonly workspaceId: string;
+  readonly groupId: string;
   readonly status: AttentionStatus;
   /** Lower is a longer wait. */
   readonly seq: number;
 }
 
-function isAttention(
-  agent: SnapshotAgent,
-): agent is SnapshotAgent & { agent_status: AttentionStatus } {
-  if (!(agent.agent_status in TIER)) return false;
-  // "There are agents and I cannot tell what they are doing" is only meaningful
-  // about a pane that *has* an agent. A plain shell reporting `unknown` is just
-  // a shell. herdr already filters `agents[]` this way; the guard is here so
-  // that the model does not depend on it continuing to.
-  if (agent.agent_status === "unknown" && agent.agent === undefined) return false;
-  return true;
+function isAttention(agent: Agent): agent is Agent & { status: AttentionStatus } {
+  return agent.status in TIER;
 }
 
 /**
  * The attention set in priority order: tier `blocked` → `done` → `working` →
- * `unknown`, then lowest `state_change_seq` first within a tier, so the longest
+ * `unknown`, then lowest `waitKey` first within a tier, so the longest
  * wait wins.
  *
- * Comparable only within one server lifetime — `state_change_seq` restarts at 0
- * when herdr does.
+ * Comparable only within one server lifetime — herdr's `state_change_seq`, for
+ * one, restarts at 0 when the server does.
  */
-export function attentionSet(agents: readonly SnapshotAgent[]): readonly AttentionAgent[] {
+export function attentionSet(agents: readonly Agent[]): readonly AttentionAgent[] {
   return agents
     .filter(isAttention)
     .map(
       (agent): AttentionAgent => ({
-        paneId: agent.pane_id,
-        tabId: agent.tab_id,
-        workspaceId: agent.workspace_id,
-        status: agent.agent_status,
-        seq: agent.state_change_seq,
+        paneId: agent.paneId,
+        tabId: agent.tabId,
+        groupId: agent.groupId,
+        status: agent.status,
+        seq: agent.waitKey,
       }),
     )
     .sort((x, y) => TIER[x.status] - TIER[y.status] || x.seq - y.seq);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FIXTURE_NAMES, fixture, provenance } from "./fixtures.js";
+import { FIXTURE_NAMES, fixture, provenance, wireFixture } from "./fixtures.js";
 
 /**
  * The corpus's own gate. Provenance is only worth having if it cannot rot, so
@@ -32,7 +32,7 @@ describe("the fixture corpus", () => {
   });
 
   it.each(FIXTURE_NAMES)("%s holds a snapshot the plugin can read", (name) => {
-    const snapshot = fixture(name);
+    const snapshot = wireFixture(name);
     expect(snapshot.protocol).toBe(19);
     expect(Array.isArray(snapshot.agents)).toBe(true);
     for (const agent of snapshot.agents) {

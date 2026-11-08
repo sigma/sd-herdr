@@ -1,0 +1,70 @@
+{
+  "provenance": {
+    "kind": "captured",
+    "note": "One real session with one Claude Code agent, as the plugin's poll sees it: session.view, then program_status and title for its terminal block. The agent was done, and this window is unnamed, so its label is the default and the title carries the name.",
+    "capturedAt": "2026-11-06T21:28:00Z",
+    "subject": "Rex server API revision 11, macOS",
+    "method": "rex api call session.view, then com.superlogical.terminal.program_status and com.superlogical.terminal.title with {session_id, block_id}; read-only"
+  },
+  "view": {
+    "revision": 47,
+    "session_id": "session:01a1b1e2-013a-7e11-94e7-31fb2128b015",
+    "label": "nix",
+    "active_window_id": "window:01a1b1e2-0154-773f-bb75-379551e6587e",
+    "windows": [
+      {
+        "window_id": "window:01a1b1e2-0154-773f-bb75-379551e6587e",
+        "label": "Window 51e6587e",
+        "focused_block_id": "block:01a1b1e2-013b-701f-949c-70e1498c03a6",
+        "layers": [
+          {
+            "layer_id": "layer:01a1b1e2-0154-7747-a73c-a8328de97931",
+            "kind": "tiled",
+            "bounds": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "layout": {
+              "rect": [
+                0,
+                0,
+                1,
+                1
+              ],
+              "block_id": "block:01a1b1e2-013b-701f-949c-70e1498c03a6"
+            },
+            "blocks": [
+              {
+                "block_id": "block:01a1b1e2-013b-701f-949c-70e1498c03a6",
+                "label": "claude",
+                "creator_name": "com.superlogical.terminal",
+                "flavor": "com.superlogical.terminal.shell",
+                "host_id": "96a3508d-77b5-449e-ab1b-05a813a7d2d7",
+                "owner": "client:01a1b1c7-5692-722e-85a0-57d710eea839"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "reports": {
+    "block:01a1b1e2-013b-701f-949c-70e1498c03a6": {
+      "records": [
+        {
+          "state": "done",
+          "app": "claude-code",
+          "effective_app": "claude-code",
+          "updated_at": "2026-11-06T22:17:48.071919+01:00",
+          "owner": {
+            "pid": 51399,
+            "name": "claude"
+          }
+        }
+      ],
+      "title": "claude-cave --danger ~/.c/nix"
+    }
+  }
+}

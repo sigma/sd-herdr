@@ -23,11 +23,11 @@ import {
   type PipColour,
   type StateColour,
 } from "../face/descriptor.js";
-import { DEFAULT_SESSION } from "../herdr/session.js";
-import type { Snapshot } from "../herdr/snapshot.js";
 import { type AttentionAgent, type AttentionStatus, attentionSet } from "./attention.js";
+import type { Backend } from "./backend.js";
 import { bodyFor } from "./body.js";
-import { isRestart, terminalsOf } from "./lifetime.js";
+import { isRestart, lifetimeOf } from "./lifetime.js";
+import type { LifetimeMarker, Snapshot } from "./snapshot.js";
 
 /**
  * What each tier of the attention set says the bar should be.
@@ -67,22 +67,13 @@ export const POLL_INTERVAL_MS = 1000;
 export const STALENESS_DEADLINE_MS = 3000;
 
 /**
- * How long the face is held grey after a server lifetime boundary, before the
- * data is trusted again.
- *
- * **Deliberately a separate constant from the staleness deadline.** They answer
- * different questions — one asks whether the data is recent, the other whether
- * a herdr that has just come back has finished making sense — and tying them
- * together would make a change to either a silent change to the other.
- *
- * Sized for the slower of the two boundary shapes, because they are
- * indistinguishable at the moment they happen: a live handoff brings agents
- * back at ~0.4 s but correct statuses only at ~3.74 s, since re-detected state
- * is seeded `Idle` under a 3 s startup grace window
- * (`docs/research/herdr-detected-agent-restart.md`). A stop/restart resolves to
- * nothing at all, and 4 s of grey before an honest dark tile costs nothing.
+ * The grey hold after a server lifetime boundary is the backend's `settleMs`,
+ * not a core constant. **Deliberately separate from the staleness deadline**:
+ * they answer different questions — one asks whether the data is recent, the
+ * other whether a server that has just come back has finished making sense —
+ * and tying them together would make a change to either a silent change to the
+ * other.
  */
-export const SETTLE_WINDOW_MS = 4000;
 
 /**
  * The longest gap between retries. Failures back off — one unreachable socket
@@ -122,22 +113,27 @@ export type CoreEvent =
    */
   | { readonly type: "focusResult"; readonly at: number; readonly ok: boolean };
 
-/** What the core asks the world for. Data — the adapters decide how. */
+/**
+ * What the core asks the world for. Data — the adapters decide how.
+ *
+ * Every effect that reaches a server names it by an opaque **session key**,
+ * which only the backend can read: for herdr it is the socket path.
+ */
 export type Effect =
-  | { readonly type: "snapshot"; readonly socketPath: string }
+  | { readonly type: "snapshot"; readonly sessionKey: string }
   /**
    * Ask the server what it is. Issued on startup and on a detected restart
    * **only**, never per poll: it answers a question — which herdr build is on
    * the other end of this socket — that changes exactly when a server lifetime
    * does, and the snapshot poll is already carrying the running cost.
    */
-  | { readonly type: "ping"; readonly socketPath: string }
+  | { readonly type: "ping"; readonly sessionKey: string }
   | { readonly type: "pollAfter"; readonly ms: number }
   | { readonly type: "tickAfter"; readonly ms: number }
-  | { readonly type: "setTitle"; readonly socketPath: string; readonly nonce: string }
-  | { readonly type: "focusPane"; readonly socketPath: string; readonly paneId: string }
+  | { readonly type: "setTitle"; readonly sessionKey: string; readonly nonce: string }
+  | { readonly type: "focusPane"; readonly sessionKey: string; readonly paneId: string }
   | { readonly type: "raise"; readonly nonce: string }
-  | { readonly type: "clearTitle"; readonly socketPath: string };
+  | { readonly type: "clearTitle"; readonly sessionKey: string };
 
 /**
  * The core's state. Deliberately not part of the tested contract: tests drive
@@ -147,12 +143,13 @@ export type Effect =
 export interface CoreState {
   readonly sessionName: string;
   /**
-   * The socket answering for that session. Computed once from the session name
-   * and fixed for the button's life: it is a path convention, not a lookup, so
-   * there is nothing to re-resolve. Whether anything is listening on it is the
-   * snapshot's business.
+   * What the backend answers to for that session. Computed once from the
+   * session name and fixed for the button's life, so there is nothing to
+   * re-resolve. Whether anything is listening is the snapshot's business.
    */
-  readonly socketPath: string;
+  readonly sessionKey: string;
+  /** The multiplexer this button speaks to: the constants the policy reads. */
+  readonly backend: Backend;
   /** Whether the button is on screen. Nothing is polled while it is not. */
   readonly visible: boolean;
   /** The last snapshot seen, or null for "cannot see the session". */
@@ -177,10 +174,25 @@ export interface CoreState {
    */
   readonly aimedAt: string | null;
   /**
-   * The last snapshot's `pane_id → terminal_id` map — the whole of what the
-   * core remembers about the server lifetime it is talking to.
+   * The `done` reports a press has shown the user, as pane → the wait key of
+   * the report it showed. A `done` agent whose current report is in here has
+   * been shown and leaves the attention set, until it reports again (a new wait
+   * key) or the server restarts.
+   *
+   * herdr keeps this itself (focusing a pane marks it `seen`, and a seen idle
+   * agent is not `done`), so there the entry only hides the agent until the
+   * next snapshot says the same thing. Rex keeps a seen mark only in its app,
+   * out of the API's reach, and holds `done` on the server until the agent's
+   * next turn; there the entry is the only thing that clears the tile. A focus
+   * the user makes in the Rex app itself is invisible to the plugin and clears
+   * nothing (`docs/research/rex-program-status.md` §6).
    */
-  readonly terminals: ReadonlyMap<string, string>;
+  readonly shown: ReadonlyMap<string, number>;
+  /**
+   * The last snapshot's lifetime marker — the whole of what the core remembers
+   * about the server lifetime it is talking to.
+   */
+  readonly lifetime: LifetimeMarker;
   /**
    * When the settling grey ends, or 0 for "not settling". A deadline rather
    * than a flag, for the same reason staleness is: it is answered by comparing
@@ -194,14 +206,18 @@ export interface CoreState {
 /** One shared empty set, so an untouched cycle allocates nothing. */
 const NO_PANES: ReadonlySet<string> = new Set();
 
+/** The same, for the shown marks. */
+const NO_SHOWN: ReadonlyMap<string, number> = new Map();
+
 /** The same, for a core that has not seen a snapshot yet. */
-const NO_TERMINALS: ReadonlyMap<string, string> = new Map();
+const NO_LIFETIME: LifetimeMarker = new Map();
 
 /** A core that has not seen anything yet. */
-export function initial(sessionName: string, socketPath: string): CoreState {
+export function initial(sessionName: string, sessionKey: string, backend: Backend): CoreState {
   return {
     sessionName,
-    socketPath,
+    sessionKey,
+    backend,
     visible: false,
     snapshot: null,
     snapshotAt: 0,
@@ -209,10 +225,29 @@ export function initial(sessionName: string, socketPath: string): CoreState {
     presses: 0,
     visited: NO_PANES,
     aimedAt: null,
-    terminals: NO_TERMINALS,
+    shown: NO_SHOWN,
+    lifetime: NO_LIFETIME,
     settlingUntil: 0,
     at: 0,
   };
+}
+
+/**
+ * The shown marks that still describe a report on screen: the pane is there,
+ * still `done`, with the same wait key. Anything else has moved on, and a mark
+ * left behind would hide the agent's *next* `done`.
+ */
+function settleShown(
+  shown: ReadonlyMap<string, number>,
+  snapshot: Snapshot,
+): ReadonlyMap<string, number> {
+  if (shown.size === 0) return shown;
+  const kept = [...shown].filter(([paneId, waitKey]) =>
+    snapshot.agents.some(
+      (agent) => agent.paneId === paneId && agent.status === "done" && agent.waitKey === waitKey,
+    ),
+  );
+  return kept.length === 0 ? NO_SHOWN : new Map(kept);
 }
 
 /**
@@ -238,14 +273,17 @@ function settle(
   return pruned.size === live.size ? NO_PANES : pruned;
 }
 
-/** The attention set of the snapshot in hand, in priority order. */
+/** The attention set of the snapshot in hand, in priority order, less the `done` reports already shown. */
 function ordered(state: CoreState): readonly AttentionAgent[] {
-  return state.snapshot === null ? [] : attentionSet(state.snapshot.agents);
+  if (state.snapshot === null) return [];
+  return attentionSet(state.snapshot.agents).filter(
+    (agent) => !(agent.status === "done" && state.shown.get(agent.paneId) === agent.seq),
+  );
 }
 
 /** Ask for a snapshot — but only while anyone is looking. */
 function probe(state: CoreState): Effect[] {
-  return state.visible ? [{ type: "snapshot", socketPath: state.socketPath }] : [];
+  return state.visible ? [{ type: "snapshot", sessionKey: state.sessionKey }] : [];
 }
 
 /** Come back in a beat — but only while anyone is looking. */
@@ -287,7 +325,7 @@ export function reduce(
       return {
         state: next,
         effects: [
-          { type: "ping", socketPath: next.socketPath },
+          { type: "ping", sessionKey: next.sessionKey },
           ...probe(next),
           ...scheduleTick(next),
         ],
@@ -310,8 +348,8 @@ export function reduce(
       // the next dropped poll starts counting from scratch rather than
       // inheriting a five-second gap from an outage that is over.
       const next = { ...state, snapshot: event.snapshot, snapshotAt: at, failures: 0, at };
-      const terminals = terminalsOf(event.snapshot);
-      const restarted = isRestart(state.terminals, terminals);
+      const lifetime = lifetimeOf(event.snapshot);
+      const restarted = isRestart(state.lifetime, lifetime);
 
       // A restart is the third of the cycle's three resets — the others are the
       // wrap and `willDisappear`. The panes may well still be there, but the
@@ -321,17 +359,22 @@ export function reduce(
         return {
           state: {
             ...next,
-            terminals,
-            settlingUntil: at + SETTLE_WINDOW_MS,
+            lifetime,
+            // A zero `settleMs` lands the deadline on `at`, which is already
+            // over: the reset happens and the face is never held.
+            settlingUntil: at + state.backend.settleMs,
             visited: NO_PANES,
             aimedAt: null,
+            shown: NO_SHOWN,
           },
-          effects: [{ type: "ping", socketPath: next.socketPath }, ...schedulePoll(next)],
+          effects: [{ type: "ping", sessionKey: next.sessionKey }, ...schedulePoll(next)],
         };
       }
 
+      const shown = settleShown(state.shown, event.snapshot);
+      const settled = { ...next, lifetime, shown };
       return {
-        state: { ...next, terminals, visited: settle(state.visited, ordered(next)) },
+        state: { ...settled, visited: settle(state.visited, ordered(settled)) },
         effects: schedulePoll(next),
       };
     }
@@ -369,23 +412,38 @@ export function reduce(
       // A press that aimed at nothing leaves the cycle where it was: there is
       // no visit to record, and a grey face means the plugin does not trust
       // what it knows well enough to spend a step of the cycle on it.
+      //
+      // A press onto a `done` agent shows the user its result, so the report is
+      // marked shown and leaves the set, as herdr's own `seen` flag would.
+      const aimed = ordered(stepped).find((agent) => agent.paneId === target);
+      const shown =
+        aimed?.status === "done"
+          ? new Map([...stepped.shown, [aimed.paneId, aimed.seq]])
+          : stepped.shown;
+      const marked = { ...stepped, shown };
       const next =
         target === null
           ? stepped
           : {
-              ...stepped,
-              visited: settle(new Set([...stepped.visited, target]), ordered(stepped)),
+              ...marked,
+              visited: settle(new Set([...stepped.visited, target]), ordered(marked)),
               aimedAt: target,
             };
       return {
         state: next,
         effects: [
-          { type: "setTitle", socketPath: next.socketPath, nonce },
+          // A backend that does not mark the window has no nonce to write or
+          // to take back; its raise aims without one.
+          ...(next.backend.marksWindow
+            ? ([{ type: "setTitle", sessionKey: next.sessionKey, nonce }] as const)
+            : []),
           ...(target === null
             ? []
-            : ([{ type: "focusPane", socketPath: next.socketPath, paneId: target }] as const)),
+            : ([{ type: "focusPane", sessionKey: next.sessionKey, paneId: target }] as const)),
           { type: "raise", nonce },
-          { type: "clearTitle", socketPath: next.socketPath },
+          ...(next.backend.marksWindow
+            ? ([{ type: "clearTitle", sessionKey: next.sessionKey }] as const)
+            : []),
         ],
       };
     }
@@ -400,12 +458,15 @@ export function reduce(
       // A focus that failed also gives its visit back: the cycle records where
       // a press *took* the user, and this one took them nowhere. If the pane
       // died the next snapshot prunes it anyway; if it did not, the next press
-      // tries it again.
-      const visited =
-        event.ok || state.aimedAt === null
-          ? state.visited
-          : new Set([...state.visited].filter((paneId) => paneId !== state.aimedAt));
-      const next = { ...state, visited, aimedAt: null, at };
+      // tries it again. Its shown mark goes the same way: the user saw nothing.
+      const failed = !event.ok && state.aimedAt !== null;
+      const visited = failed
+        ? new Set([...state.visited].filter((paneId) => paneId !== state.aimedAt))
+        : state.visited;
+      const shown = failed
+        ? new Map([...state.shown].filter(([paneId]) => paneId !== state.aimedAt))
+        : state.shown;
+      const next = { ...state, visited, shown, aimedAt: null, at };
       return { state: next, effects: probe(next) };
     }
 
@@ -456,7 +517,7 @@ function pressTarget(state: CoreState): string | null {
  * session name is in the string.
  */
 function nonceFor(state: CoreState): string {
-  return `sd-herdr raise ${state.sessionName} #${state.presses}`;
+  return `sd-mux raise ${state.sessionName} #${state.presses}`;
 }
 
 /**
@@ -467,12 +528,18 @@ export function face(state: CoreState): FaceDescriptor {
   const colour = stateColour(state);
 
   // Grey is the one "cannot see anything" state, and is never all-clear. Its
-  // plate reads `herdr` whatever the session is called, because grey is
+  // plate reads the backend's name whatever the session is called, because grey is
   // deliberately *one* state: a plate that varied by cause would split on the
   // face what the colour joins, and the causes are not distinctions the user
   // can act on differently anyway.
   if (colour === "grey")
-    return { stateColour: "grey", nameplate: "herdr", body: "", pips: [], pipOverflow: false };
+    return {
+      stateColour: "grey",
+      nameplate: state.backend.name,
+      body: "",
+      pips: [],
+      pipOverflow: false,
+    };
 
   // The body names where the *next press* goes; the pips are everyone else
   // still waiting. Both are read off the same ordering the press cycle walks,
@@ -483,9 +550,7 @@ export function face(state: CoreState): FaceDescriptor {
 
   return {
     stateColour: colour,
-    // `default` is herdr's placeholder rather than a name the user chose, so
-    // the slot buys product identity instead.
-    nameplate: state.sessionName === DEFAULT_SESSION ? "herdr" : state.sessionName,
+    nameplate: state.backend.plateFor(state.sessionName),
     body: state.snapshot === null ? "" : bodyFor(state.snapshot, set, target),
     pips: others.slice(0, PIP_CAP).map((agent) => TIER_COLOUR[agent.status]),
     pipOverflow: others.length > PIP_CAP,
@@ -516,6 +581,6 @@ function stateColour(state: CoreState): StateColour {
   // urgent thing in the session and its tier is the colour. Reading the colour
   // off the same ordering the press cycle uses keeps one table in charge of
   // both, rather than a second cascade that has to be kept in step with it.
-  const head = attentionSet(state.snapshot.agents)[0];
+  const head = ordered(state)[0];
   return head === undefined ? "dark" : TIER_COLOUR[head.status];
 }

@@ -125,11 +125,23 @@ status reports come from Claude Code itself.
   `updated_at`.
 - A state the plugin does not know is read as `idle`, as the schema requires.
 
-## 6. Not measured
+## 6. The Rex app keeps its own seen mark
 
-- Whether the Rex app's own status markers (session picker, unfocused tabs) disappear once
-  the user has seen a `done` agent. They are drawn by the app; the server record they would
-  be drawn from stays `done` (§1), and the tile reads the server. If the app does hide them,
-  the tile and the app disagree about a seen `done` agent: the tile stays green until the
-  agent's next turn.
+**[C]** (2026-11-07, Rex Beta 0.1.0 (1829), user-observed): a `done` Claude Code agent shows a
+blue dot on its pane icon in the Rex app. The dot goes when the pane is focused, and does not
+come back when the app switches to another session. The server record stayed `done`
+throughout (read with `program_status` after the press, `updated_at` unchanged).
+
+**[V]** Nothing the API exposes carries that mark: `session.view`, its blocks, `client.list`
+(the app client's `info` is kind, platform, name, version and label) and `block_creator.list`
+(the terminal creator lists no events) have no seen, unread or indicator field, and the
+[events reference](https://www.superlogical.com/rex/docs/reference/events.md) has no focus or
+seen event. The [protocol](https://www.superlogical.com/rex/docs/build/program-status.md)
+leaves "when to stop showing" `done` to the terminal, and Rex's answer lives in the app.
+
+So the plugin keeps its own mark: a press from the deck onto a `done` agent marks that report
+shown (see the README's accepted costs). Focus made in the app itself is invisible to it.
+
+## 7. Not measured
+
 - Permission prompts and `error` from a real agent (§4).

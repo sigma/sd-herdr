@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import type { Snapshot } from "../herdr/snapshot.js";
 import { fixture } from "../testing/fixtures.js";
-import { isRestart, terminalsOf } from "./lifetime.js";
+import { isRestart, lifetimeOf } from "./lifetime.js";
+import type { Snapshot } from "./snapshot.js";
 
-const terminals = (name: Parameters<typeof fixture>[0]) => terminalsOf(fixture(name));
+const terminals = (name: Parameters<typeof fixture>[0]) => lifetimeOf(fixture(name));
 
-describe("terminalsOf", () => {
+describe("lifetimeOf", () => {
   it("maps every pane to the terminal it is running under", () => {
     expect([...terminals("blocked-one")]).toEqual([
       ["w0:p1", "term_aaa0000000001"],
@@ -19,7 +19,7 @@ describe("terminalsOf", () => {
     // the agent list would go blind at exactly the moment it is needed.
     const empty = fixture("restart-empty");
     expect(empty.agents).toEqual([]);
-    expect(terminalsOf(empty).size).toBe(2);
+    expect(lifetimeOf(empty).size).toBe(2);
   });
 
   it("is empty for a snapshot that carries no panes at all", () => {
@@ -61,7 +61,7 @@ describe("isRestart", () => {
   it("does not fire when the snapshot carries no panes to compare", () => {
     // A fixture trimmed of `panes[]` says nothing about lifetimes either way,
     // and saying nothing must never read as "restarted".
-    const bare: Snapshot = { ...fixture("blocked-one"), panes: undefined };
-    expect(isRestart(terminals("blocked-one"), terminalsOf(bare))).toBe(false);
+    const bare: Snapshot = { ...fixture("blocked-one"), lifetime: undefined };
+    expect(isRestart(terminals("blocked-one"), lifetimeOf(bare))).toBe(false);
   });
 });

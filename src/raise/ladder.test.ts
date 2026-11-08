@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Aerospace } from "./aerospace.js";
 import { type RaiseWorld, raiseLadder } from "./ladder.js";
 
-const NONCE = "sd-herdr raise default #3";
+const NONCE = "sd-mux raise default #3";
 
 /** A window manager that lists one window, carrying whatever title it is given. */
 function windowManager(options: {

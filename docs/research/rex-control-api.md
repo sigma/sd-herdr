@@ -181,6 +181,12 @@ Every one of these maps to grey. None needs a new state.
   client holds one connection and reconnects with the existing backoff on close.
 - `HerdrError(code, message)` has a direct Rex counterpart in `error.code`, which is
   stable and documented — branch on it, never on `message`.
+- **[V]** `session.attach_all` covers sessions created after it. On a throwaway server, a
+  connection that had sent it with no sessions present could `session.list`, `session.view` and
+  poll two sessions that a second connection created afterwards (2026-11-07). A tile that
+  watches the whole server relies on this.
+- **[V]** Every id observed carries a UUIDv7 under a kind prefix (`session:01a1…`,
+  `window:01a1…`, `block:01a1…`), so ids from different sessions do not collide.
 - `server.status.instance_id` (`afc3ce9e-…`, alongside `started_at` and `pid`) is a
   candidate server-lifetime marker, to be confirmed in
   [#32](https://github.com/sigma/sd-herdr/issues/32).

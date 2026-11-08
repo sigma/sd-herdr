@@ -1,15 +1,16 @@
 /**
  * The other side of the seam: the thing that obeys.
  *
- * The core says *what* should happen — resolve a socket, take a snapshot, poll
+ * The core says *what* should happen — take a snapshot, poll
  * again in a second — and the runner does it, feeding each outcome back in as a
  * timestamped event. It holds no policy of its own: every branch here is about
  * plumbing (which adapter answers an effect, when a timer is cancelled), never
  * about what the tile should say.
  */
 import type { FaceDescriptor } from "../face/descriptor.js";
-import type { Snapshot } from "../herdr/snapshot.js";
+import type { Backend } from "./backend.js";
 import { type CoreEvent, type CoreState, type Effect, face, initial, reduce } from "./core.js";
+import type { Snapshot } from "./snapshot.js";
 
 /** A cancellable timer, so a test can fire one instead of waiting for it. */
 export interface Timer {
@@ -18,20 +19,22 @@ export interface Timer {
 
 /** Everything the runner needs from the world, so a test can supply all of it. */
 export interface Adapters {
+  /** The multiplexer the adapters below speak to; its constants are policy inputs. */
+  readonly backend: Backend;
   /** One snapshot, or a rejection. */
-  snapshot(socketPath: string): Promise<Snapshot>;
+  snapshot(sessionKey: string): Promise<Snapshot>;
   /**
    * Ask the server what it is. The result goes nowhere the core can see it —
    * this is a record for the log, not an input to the face — so a failed ping
    * changes nothing but what the log says.
    */
-  ping(socketPath: string): Promise<void>;
+  ping(sessionKey: string): Promise<void>;
   /** Mark the session's host terminal window, so the raise has something to aim at. */
-  setTitle(socketPath: string, nonce: string): Promise<void>;
+  setTitle(sessionKey: string, nonce: string): Promise<void>;
   /** Put the terminal's own title back. */
-  clearTitle(socketPath: string): Promise<void>;
+  clearTitle(sessionKey: string): Promise<void>;
   /** Focus one pane — workspace, tab and pane in a single call. Rejects if it is gone. */
-  focusPane(socketPath: string, paneId: string): Promise<void>;
+  focusPane(sessionKey: string, paneId: string): Promise<void>;
   /** Bring the marked window forward, by whichever rung of the ladder answers. */
   raise(nonce: string): Promise<void>;
   /** Draw a face on the key. */
@@ -71,10 +74,10 @@ export class Runner {
 
   constructor(
     sessionName: string,
-    socketPath: string,
+    sessionKey: string,
     private readonly adapters: Adapters,
   ) {
-    this.state = initial(sessionName, socketPath);
+    this.state = initial(sessionName, sessionKey, adapters.backend);
   }
 
   /** The button came on screen. */
@@ -146,7 +149,7 @@ export class Runner {
         // exists precisely to notice that case, and it can only notice while
         // ticks are still being scheduled behind it.
         void this.adapters
-          .snapshot(effect.socketPath)
+          .snapshot(effect.sessionKey)
           .then((snapshot) =>
             this.dispatch({ type: "snapshotTaken", at: this.adapters.now(), snapshot }),
           )
@@ -157,7 +160,7 @@ export class Runner {
         // Nothing waits on the answer, and nothing branches on it: a ping that
         // fails is a socket that is down, which the very next snapshot says
         // more usefully.
-        await this.attempt("ping", () => this.adapters.ping(effect.socketPath));
+        await this.attempt("ping", () => this.adapters.ping(effect.sessionKey));
         return;
 
       case "pollAfter":
@@ -178,7 +181,7 @@ export class Runner {
 
       case "setTitle":
         await this.attempt("setTitle", () =>
-          this.adapters.setTitle(effect.socketPath, effect.nonce),
+          this.adapters.setTitle(effect.sessionKey, effect.nonce),
         );
         return;
 
@@ -187,7 +190,7 @@ export class Runner {
         // the snapshot the press was aimed with is stale. The core is told so
         // and re-reads it; nothing here retries.
         await this.adapters
-          .focusPane(effect.socketPath, effect.paneId)
+          .focusPane(effect.sessionKey, effect.paneId)
           .then(() => this.dispatch({ type: "focusResult", at: this.adapters.now(), ok: true }))
           .catch(() => this.dispatch({ type: "focusResult", at: this.adapters.now(), ok: false }));
         return;
@@ -197,7 +200,7 @@ export class Runner {
         return;
 
       case "clearTitle":
-        await this.attempt("clearTitle", () => this.adapters.clearTitle(effect.socketPath));
+        await this.attempt("clearTitle", () => this.adapters.clearTitle(effect.sessionKey));
         return;
     }
   }

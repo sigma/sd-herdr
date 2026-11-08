@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { FaceDescriptor } from "../face/descriptor.js";
-import type { Snapshot } from "../herdr/snapshot.js";
+import { HERDR } from "../herdr/backend.js";
 import { fixture } from "../testing/fixtures.js";
 import { type Adapters, Runner } from "./runner.js";
+import type { Snapshot } from "./snapshot.js";
 
 /**
  * A world under the test's control. Time advances because the test says so and
@@ -20,6 +21,7 @@ function world(overrides: Partial<Adapters> = {}) {
   let clock = 1000;
 
   const adapters: Adapters = {
+    backend: HERDR,
     async snapshot(socketPath): Promise<Snapshot> {
       calls.push(`snapshot:${socketPath}`);
       return fixture("blocked-one");
@@ -242,9 +244,9 @@ describe("Runner", () => {
     expect(w.calls).toEqual([
       `ping:${SOCK}`,
       `snapshot:${SOCK}`,
-      "setTitle:sd-herdr raise default #1",
+      "setTitle:sd-mux raise default #1",
       "focusPane:w0:p1",
-      "raise:sd-herdr raise default #1",
+      "raise:sd-mux raise default #1",
       "clearTitle",
       // Forced by the focus: one press can consume several done agents, so the
       // post-press attention set has to be re-read rather than predicted.
@@ -272,9 +274,7 @@ describe("Runner", () => {
     expect(w.calls.filter((c) => c.startsWith("raise"))).toEqual([]);
     release();
     await w.settle();
-    expect(w.calls.filter((c) => c.startsWith("raise"))).toEqual([
-      "raise:sd-herdr raise default #1",
-    ]);
+    expect(w.calls.filter((c) => c.startsWith("raise"))).toEqual(["raise:sd-mux raise default #1"]);
   });
 
   it("still raises, clears and re-snapshots when the pane died under the press", async () => {
@@ -293,8 +293,8 @@ describe("Runner", () => {
     expect(w.calls).toEqual([
       `ping:${SOCK}`,
       `snapshot:${SOCK}`,
-      "setTitle:sd-herdr raise default #1",
-      "raise:sd-herdr raise default #1",
+      "setTitle:sd-mux raise default #1",
+      "raise:sd-mux raise default #1",
       "clearTitle",
       `snapshot:${SOCK}`,
     ]);

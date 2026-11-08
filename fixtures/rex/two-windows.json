@@ -1,0 +1,133 @@
+{
+  "provenance": {
+    "kind": "derived",
+    "note": "HAND-DERIVED. Two windows in one session. The first is named `api` and holds a blocked agent; the second keeps Rex's default label `Window <last 8 of its id>` and holds a done agent, so the body must name it by its terminal's title. A plain shell with no status sits beside the blocked agent. Timestamps are 08:00 and 09:00, so the blocked agent has waited longer.",
+    "derivedFrom": "live-session.json (the captured session.view shape) and the program-status records in docs/research/rex-program-status.md"
+  },
+  "view": {
+    "revision": 1,
+    "session_id": "session:two-windows",
+    "label": "work",
+    "windows": [
+      {
+        "window_id": "window:two-aaaaaaa1",
+        "label": "api",
+        "focused_block_id": "block:a1",
+        "layers": [
+          {
+            "layer_id": "layer:tiled",
+            "kind": "tiled",
+            "bounds": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "layout": {
+              "rect": [
+                0,
+                0,
+                1,
+                1
+              ],
+              "split": {
+                "split_id": "split:horizontal",
+                "direction": "horizontal",
+                "ratio": 0.5,
+                "before": {
+                  "rect": [
+                    0,
+                    0,
+                    0.5,
+                    1
+                  ],
+                  "block_id": "block:a1"
+                },
+                "after": {
+                  "rect": [
+                    0.5,
+                    0,
+                    0.5,
+                    1
+                  ],
+                  "block_id": "block:a2"
+                }
+              }
+            },
+            "blocks": [
+              {
+                "block_id": "block:a1",
+                "creator_name": "com.superlogical.terminal"
+              },
+              {
+                "block_id": "block:a2",
+                "creator_name": "com.superlogical.terminal"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "window_id": "window:two-bbbbbbb2",
+        "label": "Window bbbbbbb2",
+        "focused_block_id": "block:b1",
+        "layers": [
+          {
+            "layer_id": "layer:tiled",
+            "kind": "tiled",
+            "bounds": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "layout": {
+              "rect": [
+                0,
+                0,
+                1,
+                1
+              ],
+              "block_id": "block:b1"
+            },
+            "blocks": [
+              {
+                "block_id": "block:b1",
+                "creator_name": "com.superlogical.terminal"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "active_window_id": "window:two-aaaaaaa1"
+  },
+  "reports": {
+    "block:a1": {
+      "records": [
+        {
+          "state": "blocked",
+          "updated_at": "2026-11-06T08:00:00+01:00",
+          "app": "claude-code",
+          "effective_app": "claude-code"
+        }
+      ],
+      "title": "claude"
+    },
+    "block:a2": {
+      "records": [],
+      "title": "fish"
+    },
+    "block:b1": {
+      "records": [
+        {
+          "state": "done",
+          "updated_at": "2026-11-06T09:00:00+01:00",
+          "app": "claude-code",
+          "effective_app": "claude-code"
+        }
+      ],
+      "title": "fix flaky test"
+    }
+  }
+}

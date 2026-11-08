@@ -1,11 +1,14 @@
-# sd-herdr
+# sd-mux
 
 A Stream Deck button that surfaces whether any agent in a
-[herdr](https://github.com/ogulcancelik/herdr) session needs attention, and on press walks
-you through them, one press per agent.
+[herdr](https://github.com/ogulcancelik/herdr) session or a Rex server needs attention,
+and on press walks you through them, one press per agent.
 
-The design is specified in [#17](https://github.com/sigma/sd-herdr/issues/17); the
-vocabulary it is argued in is [`CONTEXT.md`](CONTEXT.md).
+The herdr design is specified in [#17](https://github.com/sigma/sd-herdr/issues/17). The
+two-backend design is in [#35](https://github.com/sigma/sd-herdr/issues/35), decided on
+[map #29](https://github.com/sigma/sd-herdr/issues/29), and the choice to keep one project
+is recorded in [ADR 0001](docs/adr/0001-one-plugin-two-backends.md). The vocabulary is in
+[`CONTEXT.md`](CONTEXT.md).
 
 ## Install
 
@@ -18,44 +21,72 @@ just install
 just link             # builds, then `streamdeck link` the .sdPlugin
 ```
 
-Then drag **herdr → Attention** onto a key. That is the whole setup: out of the box the
-tile follows the herdr session named `default` and starts painting within a poll, with
-nothing to configure and no `herdr` binary involved — the plugin talks to the session's
-unix socket directly, which matters because `herdr` is *not* on a plugin's `PATH`
-([why](docs/research/plugin-runtime-environment.md)).
+**Upgrading from sd-herdr:** the plugin is now `dev.yrh.sd-mux`, and Stream Deck treats a
+new UUID as a new plugin. Keys placed under the old `dev.yrh.sd-herdr` stop working and must
+be dragged on again; `streamdeck unlink dev.yrh.sd-herdr` removes the old link.
 
-What it does need is a herdr **server** with a session actually running — everything here
-is verified against herdr 0.8.0 / protocol 19. Until there is a session to connect to, the
-tile sits grey, which is the first thing to check if it never turns any other colour.
+Then drag **sd-mux → Attention** onto a key. Out of the box that tile is a herdr tile: it
+follows the herdr session named `default` and starts painting within a poll, with nothing to
+configure and no `herdr` binary involved — the plugin talks to the session's unix socket
+directly, which matters because `herdr` is *not* on a plugin's `PATH`
+([why](docs/research/plugin-runtime-environment.md)). A Rex tile needs one setting, below.
+
+### herdr setup
+
+What it needs is a herdr **server** with a session actually running — everything here is
+verified against herdr 0.8.0 / protocol 19. Until there is a session to connect to, the tile
+sits grey, which is the first thing to check if it never turns any other colour.
+
+### Rex setup
+
+Rex needs the Rex server running, the Rex app connected to it, and one setting.
+
+- **The Rex server.** The plugin connects to its control socket at
+  `~/Library/Application Support/rex/server.sock`, derived from the home directory, because
+  Rex's own `REX_SERVER` variable is not in a plugin's environment
+  ([control API](docs/research/rex-control-api.md) §7). Verified against Rex server
+  `0.0.1793890641-gaf0c20`, API revision 11. The plugin pins revision 11 at both ends, so a
+  server that cannot speak it refuses the connection and the tile stays grey (the API's
+  documented behaviour; not exercised here).
+- **The Rex app**, connected to that server. The press uses the app to show the agent's tab;
+  see [On Rex](#on-rex). With no app connected the press still focuses the agent on the
+  server and runs `open -b`, and what that shows is not tested.
+- **Nothing to choose.** Set **Backend** to Rex. The tile speaks for the whole local server:
+  every agent in every one of its sessions.
 
 ### Settings
 
-Two, both in the property inspector, both optional:
+Each button has a **Backend**, and then the fields for that backend. All are optional.
 
-| Setting | Default | What it does |
-| --- | --- | --- |
-| **Session** | `default` | The herdr session this button speaks for. |
-| **Terminal app** | `com.mitchellh.ghostty` | Bundle id of the terminal hosting that session. Used **only** as the last-resort input to the raise. |
+| Setting | Backend | Default | What it does |
+| --- | --- | --- | --- |
+| **Backend** (`backend`) | — | herdr | herdr or Rex (stored as `rex`). Any other value, or none, is herdr, so a key placed before Rex existed is herdr. |
+| **Session** (`sessionName`) | herdr | `default` | The herdr session this button speaks for. |
+| **Terminal app** (`hostAppBundleId`) | herdr | `com.mitchellh.ghostty` | Bundle id of the terminal hosting that session. Used **only** as the last-resort input to the raise. |
 
-**One tile speaks for exactly one session** — that is what keeps a single colour
-meaningful. Watching a second session means a second button, and the two operate
-independently. Two buttons pointed at the *same* session cost one poll, not two, and share
-one walk through the attention set: they are two views of the same cycle.
+**One tile speaks for exactly one herdr session, or for the whole Rex server** — one colour
+for one place to look. Watching a second herdr session means a second button, and the two
+operate independently. Two buttons pointed at the *same* session, or two Rex buttons, cost one
+poll, not two, and share one walk through the attention set: they are two views of the same
+cycle.
 
-Renaming the session re-resolves the socket and resets the cycle. A session that is not
-running renders exactly the same grey as an unreachable socket — one "cannot see anything"
-state, not two.
+**herdr.** Renaming the session re-resolves the socket and resets the cycle. A session that
+is not running renders exactly the same grey as an unreachable socket — one "cannot see
+anything" state, not two.
 
-**Terminal app** is only consulted when the plugin cannot work out for itself which
+**herdr's Terminal app** is only consulted when the plugin cannot work out for itself which
 application hosts the session — inside tmux or zellij, or over SSH — and never on a machine
 running a supported window manager. Because a wrong value there produces a confidently
 wrong raise, its use is never silent: the key flashes on every press that falls back to it
-(see [The press](#the-press)).
+(see [On herdr](#on-herdr)).
+
+**Rex.** A Rex tile has no settings of its own. Each poll lists the server's sessions and reads
+them all, so a session opened or closed in Rex joins or leaves the tile on the next poll.
 
 ## The face
 
 The tile is a coloured nameplate, a body line, and a row of pips. It polls the session once
-a second, so a change in herdr reaches the face about a poll later.
+a second, so a change on the server reaches the face about a poll later.
 
 **The plate carries the state colour**, which is the tier of the most urgent agent in the
 session. The rows below are in that priority order, most urgent first:
@@ -73,18 +104,23 @@ arrived — but that is what each colour *says*, not how they rank. `done` outra
 `working`: a finished agent is owed an answer, a running one is only somewhere to look.
 
 **Grey is not "all clear" — dark is.** This is the single most important thing not to
-misread on this tile. Grey says the plugin has nothing it trusts to show you: the socket is
-unreachable, the session is stopped, the last snapshot has aged past 3 s, herdr restarted
-under it and it is holding for 4 s, or every agent it can see reports `unknown`. All of
-those collapse into one colour with one plate deliberately, because they are one statement
-— *ask somewhere else* — and splitting them would invite reading a lighter grey as a
-milder problem. Failures back off to a 5 s ceiling and recover on their own; grey clears
-itself when the session comes back.
+misread on this tile. Grey says the plugin has nothing it trusts to show you: the socket or
+server is unreachable, the session is stopped, the last snapshot has aged past 3 s, a server
+lifetime boundary is still settling (herdr holds grey for 4 s across one; Rex does not hold),
+or every agent it can see reports `unknown` (herdr only: Rex has no `unknown`). On Rex, a tile
+with no session chosen is grey from the start, and one whose session has been destroyed goes
+grey at the 3 s deadline, as for any failed poll. All of those collapse into one colour with one plate deliberately,
+because they are one statement — *ask somewhere else* — and splitting them would invite reading
+a lighter grey as a milder problem. Failures back off to a 5 s ceiling and recover on their own;
+grey clears itself when the session comes back.
 
-**The plate's text is the session name**, clipped with an ellipsis rather than shrunk to
-fit — a name at 5px is unreadable, and so fails the tile's only job. A session named
-`default` renders **`herdr`**, since `default` is herdr's placeholder rather than a name
-anyone chose.
+**The plate's text names the session.** On herdr it is the session name, clipped with an
+ellipsis rather than shrunk to fit — a name at 5px is unreadable, and so fails the tile's only
+job. A session named `default` renders **`herdr`**, since `default` is herdr's placeholder
+rather than a name anyone chose. On Rex it is always **`rex`**: the tile speaks for the whole
+server, which has no name of its own. A grey tile always reads its backend's name, `herdr` or
+`rex`, whatever the session is called: grey is one state, and a plate that varied by cause
+would split on the face what the colour joins.
 
 **The body names where the *next press* goes** — not the most urgent agent. Those differ,
 and the body deliberately follows the button: focusing a `blocked` agent consumes nothing,
@@ -97,13 +133,25 @@ naming an amber-tier agent is correct rather than a bug. The bar is global — i
 element left saying "something is blocked *somewhere*" once the cycle has stepped past it.
 Colour is never solely load-bearing: the text survives greyscale.
 
-The body is the target's **workspace label**, plus **a pane index** — ①, ②, ③ — when, and
-only when, another agent in the attention set shares its tab. A plain shell alongside the
-target adds no index, because the press can still only go to one agent and the label is
-already unambiguous. The index counts *every* pane in the tab, agent or shell, in geometric
-order, so an `agent | shell | agent` tab reads ① and ③: the number names what is on screen,
-which is the only thing you can check it against. The index blinks — consume the sibling
-and the body goes back to a bare label.
+The body is the target's **group label** — the workspace on herdr, the window on Rex — plus
+**a position index**, ①, ②, ③, when, and only when, another agent in the attention set shares
+its tab. A plain shell alongside the target adds no index,
+because the press can still only go to one agent and the label is already unambiguous.
+
+On herdr the index counts *every* pane in the tab, agent or shell, in geometric order, so an
+`agent | shell | agent` tab reads ① and ③: the number names what is on screen, which is the
+only thing you can check it against. On Rex it counts every block of the window's tiled layout,
+agent or shell, in the same `(y, x)` order. A floating block sits over the tab and is not
+counted: it is still attention, and colours the tile and the pips, but as a target its body is
+the bare window label. The index blinks — consume the sibling and the body goes back to a bare
+label. A Rex press consumes only the `done` agent it lands on, so a sibling that is `blocked`
+keeps the index until it leaves the attention set (goes `idle` or closes).
+
+The window label on Rex is the name someone gave the window. A window nobody named, one whose
+label is empty or is still Rex's default (`Window` and the last eight characters of its id), is
+labelled from an agent's terminal title instead, the focused block's first. With no titled
+agent it keeps the default label, or shows its id if it has no label at all
+([the default label rule](CONTEXT.md#rex)).
 
 **The pips are the other waiters**, tier-coloured, in the same priority order, capped at
 four and then `…`. The agent the body names never gets a pip, so the body and the pips
@@ -111,19 +159,23 @@ never restate each other.
 
 ## The press
 
-A press focuses one agent's pane — workspace, tab and pane in one call, so it is
-immediately typeable — and raises the host terminal's window. The next press goes to the
-highest-priority attention pane this cycle has not shown yet, and so on until the set is
-spent, at which point the cycle wraps to the top. Stepping is per *pane*, so two agents
-tiled in one tab each get their own press — though a single press can still *consume*
-several `done` agents at once, which is the first accepted cost below.
+A press focuses one agent — its pane on herdr, its block on Rex — so that it is immediately
+typeable, and then brings the window that shows it forward. The raise is different on each
+backend, so each has its own section below. The next press goes to the highest-priority
+attention agent this cycle has not shown yet, and so on until the set is spent, at which point
+the cycle wraps to the top. Stepping is per *agent*, so two agents tiled in one tab each get
+their own press — though on herdr a single press can still *consume* several `done` agents at
+once, which is the first herdr cost below.
 
-The visited set is pruned rather than reset: an agent arriving mid-cycle is reachable
-without restarting the walk. It resets on exactly three things — a wrap, the button going
-away, and a detected herdr restart. There is deliberately no idle-timeout reset.
+The visited set is pruned rather than reset: an agent arriving mid-cycle is reachable without
+restarting the walk. It resets on exactly three things — a wrap, the last button on that
+session going away, and a detected server restart. There is deliberately no idle-timeout reset.
 
-Pressing while grey raises the window and focuses nothing, deliberately: the tile has
-already said it does not trust its data, so it will not act on it.
+Pressing while grey focuses nothing, deliberately: the tile has already said it does not trust
+its data, so it will not act on it. A dark tile has nothing to focus either. On herdr either
+press still runs the raise and nothing else. On Rex it only brings Rex forward.
+
+### On herdr
 
 The raise is a four-rung ladder — window manager, then AppleScript to the terminal by
 bundle id, then `open -b`, then decline. **The order is chosen for TCC, not for accuracy**:
@@ -136,10 +188,45 @@ otherwise succeeded, because that is the one rung that cannot check its own targ
 never shows on the face, because a raise outcome is per-press and the face is session
 state.
 
+### On Rex
+
+A Rex press is three steps: two on the plugin's existing control connection, then one `open`.
+None needs a permission grant, and none marks a window: there is no nonce to write or clear
+([research](docs/research/rex-raise.md)).
+
+1. **Focus** the agent's block on the server. The tile speaks for the whole server, so the
+   plugin lists the sessions and reads their views to find the session and window holding the
+   block, then calls `session.focus_block`; both are remembered for step 2. A block that closed
+   since the poll fails here, the tile re-reads the snapshot, step 2 is skipped, and step 3
+   still runs.
+2. **Select** the session and that window on the local Rex app: the connected client of kind
+   `app` on the unix socket, found with `client.list`, is sent `client.perform` with action
+   `session.select`. This is what shows the agent's tab: the server's own active window does
+   not move the app, so this step is needed. With no such client the step is skipped.
+3. **Bring Rex forward** with `open -b com.superlogical.rex`, whatever step 2 did.
+
+**The key flashes on a Rex press only when step 2 fails** (listing the clients or the select
+returns an error, including the app not answering within the 2 s the select allows it) **or
+step 3 fails.** A skipped step 2 does not flash. A press that focused nothing, grey or dark,
+skips it, and so does a press with no app connected, which focuses the agent and opens Rex
+without showing its tab while nothing on the key says so. That is the one place the Rex press
+is silent about a shortfall.
+
+A press onto a Rex agent in a session or window other than the one the app shows switches the
+app to that session and that window's tab. Several Rex windows were not tested: which window
+the select drives, and whether `open -b` fronts that one.
+
 ## Accepted costs
 
-Four behaviours below are intended and will not be fixed. Each of them looks like a bug
-from the outside, which is why they are written down here.
+The costs below are intended and will not be fixed. Each of them looks like a bug from the
+outside, which is why they are written down here.
+
+### On both backends
+
+**Keys placed before the rename must be placed again.** The plugin has a new UUID, so the
+upgrade note above is the whole of the fix: every existing user pays this once.
+
+### On herdr
 
 **A second `done` agent in the same tab is unreachable by button.** Focusing any pane calls
 herdr's "mark the active tab seen", which clears `seen` for *every* pane in that tab — so
@@ -147,7 +234,7 @@ one press consumes every `done` agent there, and its neighbour never gets its ow
 The face gives no warning, because there is nothing you could have done differently. A
 tab's panes are visible together, so consuming them together is precision rather than
 over-reach. `blocked` agents are unaffected: `blocked` is a reported state, not `idle +
-!seen`.
+!seen`. This cost does not apply on Rex, where focus changes no status.
 
 **A live handoff silently consumes the `done` tier, and this is the one case where the tile
 is confidently dark while you are still waiting.** When herdr hands its panes over to a new
@@ -165,7 +252,7 @@ immediately afterwards. If the herdr client dies in between, the clear answers
 `no_foreground_client` and the marker stays in the title bar permanently. It reads
 
 ```
-sd-herdr raise <session> #<n>
+sd-mux raise <session> #<n>
 ```
 
 rather than a hex blob for exactly this reason: the person who has to remove it is you.
@@ -180,13 +267,46 @@ under a tiler: it fronts a window on the workspace you are already looking at, w
 like success and is not. And the press's focus has already happened, so the session did
 move; only the window did not follow. The key flashes to say so.
 
-## The Automation prompt
+### On Rex
+
+**Only a press from the deck clears a `done` agent.** Rex keeps a `done` record until the
+program reports again; focusing the block, pressing keys into it, or showing the session
+changes nothing on the server ([program status](docs/research/rex-program-status.md) §1). The
+Rex app hides its own blue dot once you focus the pane, but that mark lives in the app and
+nothing in the API reports it. So the plugin keeps its own: a press onto a `done` agent marks
+that report shown, and the agent leaves the tile as it would on herdr. The mark is the
+plugin's, so:
+
+- focusing a `done` agent in the Rex app, not from the deck, leaves the tile green until the
+  agent's next turn;
+- the mark is in memory, so a plugin restart, or every Rex key leaving the deck, brings the
+  green back;
+- a `done` report the agent makes again (a new turn that ends) shows again.
+
+**No `done` survives a Rex restart, and nor does any agent.** A Rex server restart kills the
+terminal processes and drops every program status record. Session, window and block ids survive,
+but nothing comes back, so an agent that was `done` and unseen at the restart is gone afterwards
+and the tile goes dark. That dark is honest, and there is no repopulation to hold grey through
+([restart](docs/research/rex-server-restart.md)).
+
+**A Rex tile watches only the local default server.** It always uses
+`~/Library/Application Support/rex/server.sock`; a second server on another socket cannot be
+watched. Within that server there is no narrowing: a tile cannot be pointed at one session.
+
+**The Rex body does not name the session.** It names the window, as it would within one
+session, so two windows called `claude` in two sessions read the same. The press still lands on
+the right one; only the label is ambiguous.
+
+## The Automation prompt (herdr)
+
+This section is about herdr's raise. The Rex press sends no Apple Event, so it never raises
+this dialog.
 
 **Only on a machine with no supported window manager.** With AeroSpace present the plugin
 never sends an Apple Event, so none of this applies.
 
 Everywhere else, the first press may raise a system dialog asking permission to control
-another application — expect it to name **"Elgato Stream Deck"**, not sd-herdr, and to
+another application — expect it to name **"Elgato Stream Deck"**, not sd-mux, and to
 carry Elgato's own purpose string:
 
 > A Stream Deck plugin wants to use AppleScripts.
@@ -230,22 +350,30 @@ plugin log.
 ### Layout
 
 ```
-src/core/        the seam: reduce(state, event) -> {state, effects} and face(state)
+src/core/        the seam: reduce(state, event) -> {state, effects} and face(state),
+                 the neutral snapshot, and the Backend record each backend supplies
 src/face/        the FaceDescriptor and its SVG renderer (pure, unit-tested)
-src/herdr/       the NDJSON socket client, and where a session's socket lives
-src/raise/       the four-rung raise ladder, and the subprocesses it spawns
-src/actions/     the Stream Deck action — the only SDK-coupled code
+src/herdr/       herdr: the NDJSON socket client, where a session's socket lives,
+                 and the conversion of herdr's snapshot to the neutral one
+src/rex/         Rex: the control WebSocket, the poll, the conversion, the press,
+                 and the session list the inspector shows
+src/raise/       herdr's four-rung raise ladder, and the subprocess runner both
+                 backends use (`open -b` for Rex)
+src/actions/     the Stream Deck action — the only SDK-coupled code; it picks a
+                 hub by the button's backend
 src/testing/     test-only access to the fixture corpus
 src/plugin.ts    the entry point
-fixtures/        captured and hand-derived herdr snapshots, each with its provenance
-dev.yrh.sd-herdr.sdPlugin/   the manifest, the property inspector and images;
+fixtures/        herdr snapshots, and Rex views under rex/, each with its provenance
+dev.yrh.sd-mux.sdPlugin/     the manifest, the property inspector and images;
                              bin/ is built, not committed
 ```
 
 All policy lives in `src/core/`, and it is pure: it never reads a clock (every event
 carries its own timestamp) and never calls anything (effects come back as data for the
 runner to obey). That is what lets a test assert a one-second poll cadence without
-sleeping, and it is the seam every ticket builds against.
+sleeping, and it is the seam every ticket builds against. The core sees a backend only
+through the neutral snapshot and its `Backend` record (three constants and the plate rule
+`plateFor`), so a backend's wire format never reaches the policy.
 
 The plugin's marketplace icon must be a PNG (the manifest validator rejects an SVG for
 that one field). `imgs/plugin/marketplace{,@2x}.png` are rasterized from the checked-in
@@ -254,18 +382,23 @@ that one field). `imgs/plugin/marketplace{,@2x}.png` are rasterized from the che
 ## Manual verification
 
 Three things at the edge hold no policy and are **deliberately untested in CI**: the socket
-client's real I/O, the subprocess runner under `src/raise/`, and the Stream Deck SDK
-binding. Each of them is a thin translation to something CI does not have — a live herdr
-server, a window manager, a physical key — so a test double would assert only that the
-double behaves like itself. They are verified by hand instead, on the procedure below.
+clients' real I/O (herdr's and Rex's), the subprocess runner under `src/raise/`, and the
+Stream Deck SDK binding. Each of them is a thin translation to something CI does not have — a
+live herdr or Rex server, a window manager, a physical key — so a test double would assert only
+that the double behaves like itself. They are verified by hand instead, on the procedure below.
 
-Run it after any change under `src/herdr/client.ts`, `src/raise/spawn.ts`,
-`src/actions/`, `src/plugin.ts`, or the manifest — and record what you measured, replacing
-the results beneath it.
+Steps 1 and 2 are shared. Run them after any change to the manifest or `src/plugin.ts`. Run the
+herdr steps after any change under `src/herdr/client.ts`, `src/raise/spawn.ts`, `src/actions/`,
+`src/plugin.ts`, or the manifest, and the Rex steps after any change under `src/rex/client.ts`,
+`src/rex/press.ts`, `src/raise/spawn.ts`, `src/actions/`, `src/plugin.ts`, or the manifest — and
+record what you measured, replacing the results beneath it.
 
 1. **`just validate`** — the manifest and bundle pass `streamdeck validate`.
 2. **`just link`**, then watch `just logs` — the plugin process starts and completes SDK
    registration (the `RegistrationParameters` handshake).
+
+### herdr
+
 3. **Socket path and connection.** Compare the plugin's resolved path against a live
    `herdr session list --json`, and confirm the plugin connects from inside the Stream Deck
    process, with no `herdr` binary on `PATH`.
@@ -282,7 +415,7 @@ the results beneath it.
    cleared. This mutates a live herdr session, so use a scratch session rather than the one
    you are working in.
 
-Recorded results — Stream Deck app 7.4.2 / macOS 26.5.2, herdr 0.8.0 / protocol 19:
+Recorded results — herdr. Stream Deck app 7.4.2 / macOS 26.5.2, herdr 0.8.0 / protocol 19:
 
 - (1), (2) pass; step 2 checked against a connected Stream Deck XL.
 - The five state colours (`red`, `amber`, `green`, `dark`, `grey`) rasterize as expected at
@@ -297,7 +430,42 @@ Recorded results — Stream Deck app 7.4.2 / macOS 26.5.2, herdr 0.8.0 / protoco
   data, since there is nothing to resolve first.
 - (7) checked against AeroSpace 0.21.3-Beta over 13 live windows.
 
-**Not yet done by hand:** step 8; placing the key on the device and confirming the painted
+**Not yet done by hand, herdr:** step 8; placing the key on the device and confirming the painted
 face with human eyes; and rungs 2 and 3 on a machine with no window manager, including
 the Automation prompt's rendered wording — the residual `[U]`s in
 [the research](docs/research/macos-automation-prompt.md#9-hitl-checklist--the-clean-account-probe).
+
+### Rex
+
+3. **First paint.** A key set to Rex with no agent in any session is dark, and its plate reads
+   `rex`. Make an agent blocked in one session and the tile turns red; make another blocked in a
+   second session and the tile cycles through both.
+4. **Socket and handshake.** Once the first Rex key is placed, `just logs` shows the
+   `rex, api revision N` line the plugin writes once it has connected. The plugin does not log
+   the path it used, so confirm that `rex server status` reports
+   `~/Library/Application Support/rex/server.sock`, the path the plugin derives, and that the
+   plugin needed no Rex environment variable to find it.
+5. **The tracer bullet.** Make an agent block `blocked` (Claude Code asking a question does this)
+   and time the red paint from the logged `face` line. Answer it and time the amber. Let the turn
+   end and time the green. Each should land on the next poll, plus the round trip.
+6. **The press lands on the agent.** Put the agent in a session other than the one the Rex app
+   is showing, and press. The app should switch to that session and that window's tab, Rex
+   should come forward, and the agent should be where typing goes. The last part is not
+   verified: the research did not check where typed input lands.
+7. **No Automation prompt.** Throughout step 6, no macOS dialog appears, and System Settings ›
+   Privacy & Security › Automation gains no row from the press.
+8. **A press clears `done`.** Press onto a `done` agent. It leaves the tile: dark if nothing
+   else waits. Focus a different `done` agent in the Rex app instead: the tile stays green.
+9. **No app connected.** Quit the Rex app and press. Record whether Rex opens, whether any tab
+   shows, and whether the key flashes. The code says it will not flash here; this has not been
+   run on a device.
+10. **Server restart.** Stop and start the Rex server. The tile goes grey once it has been down
+    for the 3 s deadline (a quick restart, ~80 ms in the research, may never show grey), and
+    settles dark once it is back, with no `done` left. Note how long the dark takes to return.
+11. **Several windows.** With two Rex windows open, check that a press shows the tab in the window
+    it aimed at, and that `open -b` fronts that window. If it fronts the other one, the Rex press
+    is wrong for that layout and this section needs changing.
+
+Recorded results — Rex: none yet. The Rex wire behaviour was measured against a live server in
+[the research notes](docs/research/rex-control-api.md), but nothing above has been run on a device
+with the plugin.

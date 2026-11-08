@@ -1,0 +1,249 @@
+{
+  "provenance": {
+    "kind": "derived",
+    "note": "HAND-DERIVED. One window of tiled blocks that exercise the status collapse: `n1` has a root `idle` and a child `build/test` that is `blocked` (the child inherits `effective_app`, as the research measured); `n2` reports `error`; `n3` reports a state this build does not know; `n4` has a `working` and a `done` and so reads `done`; `n5` has a record with no `effective_app` anywhere in its chain, so it is not an agent; `n6` has no records at all.",
+    "derivedFrom": "live-session.json (the captured session.view shape) and the program-status records in docs/research/rex-program-status.md"
+  },
+  "view": {
+    "revision": 1,
+    "session_id": "session:nested-records",
+    "label": "work",
+    "windows": [
+      {
+        "window_id": "window:nest-eeeeeee1",
+        "label": "nested",
+        "focused_block_id": "block:n1",
+        "layers": [
+          {
+            "layer_id": "layer:tiled",
+            "kind": "tiled",
+            "bounds": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "layout": {
+              "rect": [
+                0,
+                0,
+                1,
+                1
+              ],
+              "split": {
+                "split_id": "split:vertical",
+                "direction": "vertical",
+                "ratio": 0.5,
+                "before": {
+                  "rect": [
+                    0,
+                    0,
+                    1,
+                    0.5
+                  ],
+                  "split": {
+                    "split_id": "split:horizontal",
+                    "direction": "horizontal",
+                    "ratio": 0.5,
+                    "before": {
+                      "rect": [
+                        0,
+                        0,
+                        0.5,
+                        0.5
+                      ],
+                      "split": {
+                        "split_id": "split:horizontal",
+                        "direction": "horizontal",
+                        "ratio": 0.5,
+                        "before": {
+                          "rect": [
+                            0,
+                            0,
+                            0.25,
+                            0.5
+                          ],
+                          "block_id": "block:n1"
+                        },
+                        "after": {
+                          "rect": [
+                            0.25,
+                            0,
+                            0.25,
+                            0.5
+                          ],
+                          "block_id": "block:n2"
+                        }
+                      }
+                    },
+                    "after": {
+                      "rect": [
+                        0.5,
+                        0,
+                        0.5,
+                        0.5
+                      ],
+                      "block_id": "block:n3"
+                    }
+                  }
+                },
+                "after": {
+                  "rect": [
+                    0,
+                    0.5,
+                    1,
+                    0.5
+                  ],
+                  "split": {
+                    "split_id": "split:horizontal",
+                    "direction": "horizontal",
+                    "ratio": 0.5,
+                    "before": {
+                      "rect": [
+                        0,
+                        0.5,
+                        0.5,
+                        0.5
+                      ],
+                      "split": {
+                        "split_id": "split:horizontal",
+                        "direction": "horizontal",
+                        "ratio": 0.5,
+                        "before": {
+                          "rect": [
+                            0,
+                            0.5,
+                            0.25,
+                            0.5
+                          ],
+                          "block_id": "block:n4"
+                        },
+                        "after": {
+                          "rect": [
+                            0.25,
+                            0.5,
+                            0.25,
+                            0.5
+                          ],
+                          "block_id": "block:n5"
+                        }
+                      }
+                    },
+                    "after": {
+                      "rect": [
+                        0.5,
+                        0.5,
+                        0.5,
+                        0.5
+                      ],
+                      "block_id": "block:n6"
+                    }
+                  }
+                }
+              }
+            },
+            "blocks": [
+              {
+                "block_id": "block:n1",
+                "creator_name": "com.superlogical.terminal"
+              },
+              {
+                "block_id": "block:n2",
+                "creator_name": "com.superlogical.terminal"
+              },
+              {
+                "block_id": "block:n3",
+                "creator_name": "com.superlogical.terminal"
+              },
+              {
+                "block_id": "block:n4",
+                "creator_name": "com.superlogical.terminal"
+              },
+              {
+                "block_id": "block:n5",
+                "creator_name": "com.superlogical.terminal"
+              },
+              {
+                "block_id": "block:n6",
+                "creator_name": "com.superlogical.terminal"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "active_window_id": "window:nest-eeeeeee1"
+  },
+  "reports": {
+    "block:n1": {
+      "records": [
+        {
+          "state": "idle",
+          "updated_at": "2026-11-06T08:00:00+01:00",
+          "app": "claude-code",
+          "effective_app": "claude-code"
+        },
+        {
+          "state": "blocked",
+          "updated_at": "2026-11-06T08:05:00+01:00",
+          "id": "build/test",
+          "effective_app": "claude-code"
+        }
+      ],
+      "title": "one"
+    },
+    "block:n2": {
+      "records": [
+        {
+          "state": "error",
+          "updated_at": "2026-11-06T08:10:00+01:00",
+          "app": "claude-code",
+          "effective_app": "claude-code"
+        }
+      ],
+      "title": "two"
+    },
+    "block:n3": {
+      "records": [
+        {
+          "state": "daydreaming",
+          "updated_at": "2026-11-06T08:15:00+01:00",
+          "app": "claude-code",
+          "effective_app": "claude-code"
+        }
+      ],
+      "title": "three"
+    },
+    "block:n4": {
+      "records": [
+        {
+          "state": "working",
+          "updated_at": "2026-11-06T08:20:00+01:00",
+          "app": "claude-code",
+          "effective_app": "claude-code"
+        },
+        {
+          "state": "done",
+          "updated_at": "2026-11-06T08:21:00+01:00",
+          "id": "sub",
+          "app": "claude-code",
+          "effective_app": "claude-code"
+        }
+      ],
+      "title": "four"
+    },
+    "block:n5": {
+      "records": [
+        {
+          "state": "blocked",
+          "updated_at": "2026-11-06T08:25:00+01:00"
+        }
+      ],
+      "title": "five"
+    },
+    "block:n6": {
+      "records": [],
+      "title": "six"
+    }
+  }
+}

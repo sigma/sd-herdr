@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import type { FaceDescriptor } from "../face/descriptor.js";
-import type { Snapshot } from "../herdr/snapshot.js";
+import { HERDR } from "../herdr/backend.js";
 import { fixture } from "../testing/fixtures.js";
 import { SessionHub, type SharedAdapters, type Subscriber } from "./hub.js";
+import type { Snapshot } from "./snapshot.js";
 
 const SOCK = "/Users/dev/.config/herdr/herdr.sock";
 const OTHER = "/Users/dev/.config/herdr/sessions/work/herdr.sock";
@@ -15,6 +16,7 @@ function world(snapshotFor: (socketPath: string) => Snapshot = () => fixture("mi
   let clock = 1000;
 
   const adapters: SharedAdapters = {
+    backend: HERDR,
     async snapshot(socketPath) {
       calls.push(`snapshot:${socketPath}`);
       return snapshotFor(socketPath);
@@ -214,8 +216,8 @@ describe("SessionHub", () => {
     expect(focuses(w.calls)).toEqual(["w3:p1", "w3:p1"]);
     // …and the nonce names the session it is raising, so the two never collide.
     expect(w.calls.filter((c) => c.startsWith("raise:"))).toEqual([
-      "raise:one:sd-herdr raise default #1",
-      "raise:one:sd-herdr raise work #1",
+      "raise:one:sd-mux raise default #1",
+      "raise:one:sd-mux raise work #1",
     ]);
   });
 
@@ -247,8 +249,8 @@ describe("SessionHub", () => {
     await w.settle();
 
     expect(w.calls.filter((c) => c.startsWith("raise:"))).toEqual([
-      "raise:one:sd-herdr raise default #1",
-      "raise:two:sd-herdr raise default #2",
+      "raise:one:sd-mux raise default #1",
+      "raise:two:sd-mux raise default #2",
     ]);
   });
 
@@ -280,7 +282,7 @@ describe("SessionHub", () => {
     await w.settle();
 
     expect(w.calls.filter((c) => c.startsWith("raise:"))).toEqual([
-      "raise:staying:sd-herdr raise default #1",
+      "raise:staying:sd-mux raise default #1",
     ]);
   });
 });

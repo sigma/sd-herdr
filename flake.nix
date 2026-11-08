@@ -1,5 +1,5 @@
 {
-  description = "sd-herdr dev environment (firefly-engineering/toolbox)";
+  description = "sd-mux dev environment (firefly-engineering/toolbox)";
 
   inputs = {
     nix-pins.url = "github:firefly-engineering/nix-pins";
@@ -50,7 +50,7 @@
             shellHook = ''
               export PATH="$PWD/node_modules/.bin:$PATH"
               if [ ! -d "$PWD/node_modules" ]; then
-                echo "sd-herdr: node_modules is missing — run 'just install' before 'just build' or 'just link'." >&2
+                echo "sd-mux: node_modules is missing — run 'just install' before 'just build' or 'just link'." >&2
               fi
             '';
           };

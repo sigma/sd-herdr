@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { errorCode, type Osascript, raiseByAppleScript, scriptFor } from "./applescript.js";
 
-const NONCE = "sd-herdr raise default #7";
+const NONCE = "sd-mux raise default #7";
 
 describe("errorCode", () => {
   it("reads the AppleEvent code osascript prints on a failure", () => {
@@ -39,7 +39,7 @@ describe("scriptFor", () => {
     // script that settled for the front window would report an exact raise it
     // did not perform.
     expect(scriptFor("com.mitchellh.ghostty", NONCE)).toContain(
-      'first window whose name contains "sd-herdr raise default #7"',
+      'first window whose name contains "sd-mux raise default #7"',
     );
   });
 
@@ -50,7 +50,7 @@ describe("scriptFor", () => {
   });
 
   it("escapes a session name that would otherwise end the string literal", () => {
-    const script = scriptFor("com.mitchellh.ghostty", 'sd-herdr raise say "hi" #1');
+    const script = scriptFor("com.mitchellh.ghostty", 'sd-mux raise say "hi" #1');
     expect(script).toContain('\\"hi\\"');
   });
 });

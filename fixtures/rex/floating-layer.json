@@ -1,0 +1,126 @@
+{
+  "provenance": {
+    "kind": "derived",
+    "note": "HAND-DERIVED. One window with a tiled layer (an agent beside a shell) and a floating layer above it holding a second agent. The floating agent is a real agent and counts for attention, but it is not in the tiled grid, so it adds no pane to the index count and has no index of its own. Its layout leaf sits at (0, 0), where it would sort first if wrongly counted.",
+    "derivedFrom": "live-session.json (the captured session.view shape) and the program-status records in docs/research/rex-program-status.md"
+  },
+  "view": {
+    "revision": 1,
+    "session_id": "session:floating-layer",
+    "label": "work",
+    "windows": [
+      {
+        "window_id": "window:float-ddddddd1",
+        "label": "scratch",
+        "focused_block_id": "block:d1",
+        "layers": [
+          {
+            "layer_id": "layer:tiled",
+            "kind": "tiled",
+            "bounds": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "layout": {
+              "rect": [
+                0,
+                0,
+                1,
+                1
+              ],
+              "split": {
+                "split_id": "split:horizontal",
+                "direction": "horizontal",
+                "ratio": 0.5,
+                "before": {
+                  "rect": [
+                    0,
+                    0,
+                    0.5,
+                    1
+                  ],
+                  "block_id": "block:d1"
+                },
+                "after": {
+                  "rect": [
+                    0.5,
+                    0,
+                    0.5,
+                    1
+                  ],
+                  "block_id": "block:d2"
+                }
+              }
+            },
+            "blocks": [
+              {
+                "block_id": "block:d1",
+                "creator_name": "com.superlogical.terminal"
+              },
+              {
+                "block_id": "block:d2",
+                "creator_name": "com.superlogical.terminal"
+              }
+            ]
+          },
+          {
+            "layer_id": "layer:floating",
+            "kind": "floating",
+            "bounds": [
+              0,
+              0,
+              1,
+              1
+            ],
+            "layout": {
+              "rect": [
+                0,
+                0,
+                0.4,
+                0.4
+              ],
+              "block_id": "block:d3"
+            },
+            "blocks": [
+              {
+                "block_id": "block:d3",
+                "creator_name": "com.superlogical.terminal"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "active_window_id": "window:float-ddddddd1"
+  },
+  "reports": {
+    "block:d1": {
+      "records": [
+        {
+          "state": "working",
+          "updated_at": "2026-11-06T08:00:00+01:00",
+          "app": "claude-code",
+          "effective_app": "claude-code"
+        }
+      ],
+      "title": "main"
+    },
+    "block:d2": {
+      "records": [],
+      "title": "shell"
+    },
+    "block:d3": {
+      "records": [
+        {
+          "state": "blocked",
+          "updated_at": "2026-11-06T08:10:00+01:00",
+          "app": "claude-code",
+          "effective_app": "claude-code"
+        }
+      ],
+      "title": "popup"
+    }
+  }
+}

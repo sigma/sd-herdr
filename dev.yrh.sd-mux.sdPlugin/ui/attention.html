@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>herdr — Attention</title>
+    <title>Attention</title>
     <style>
       /* The inspector's own look, kept to what two text fields need. Written
          out rather than pulled from a CDN: a plugin that talks to a unix socket
@@ -25,7 +25,8 @@
         padding-right: 8px;
         color: #969696;
       }
-      input {
+      input,
+      select {
         flex: 1;
         min-width: 0;
         padding: 4px 6px;
@@ -46,26 +47,44 @@
   </head>
   <body>
     <div class="row">
-      <label for="sessionName">Session</label>
-      <input id="sessionName" type="text" placeholder="default" />
+      <label for="backend">Backend</label>
+      <select id="backend">
+        <option value="herdr">herdr</option>
+        <option value="rex">Rex</option>
+      </select>
     </div>
-    <p>
-      The herdr session this button speaks for. One tile speaks for exactly one
-      session — add a second button for a second session. Two buttons on the
-      same session share a single poll.
-    </p>
 
-    <div class="row">
-      <label for="hostAppBundleId">Terminal app</label>
-      <input id="hostAppBundleId" type="text" placeholder="com.mitchellh.ghostty" />
+    <!-- Only the chosen backend's fields are shown. -->
+    <div id="rex" hidden>
+      <p>
+        The button speaks for the local Rex server: every agent in every one of
+        its sessions. There is nothing to configure.
+      </p>
     </div>
-    <p>
-      Bundle id of the terminal hosting this session, used only when the plugin
-      cannot work out which application to raise — inside tmux or zellij, or
-      over SSH. The key flashes on any press that has to fall back to it, so a
-      wrong value here announces itself rather than quietly raising the wrong
-      window.
-    </p>
+
+    <div id="herdr">
+      <div class="row">
+        <label for="sessionName">Session</label>
+        <input id="sessionName" type="text" placeholder="default" />
+      </div>
+      <p>
+        The herdr session this button speaks for. One tile speaks for exactly one
+        session — add a second button for a second session. Two buttons on the
+        same session share a single poll.
+      </p>
+
+      <div class="row">
+        <label for="hostAppBundleId">Terminal app</label>
+        <input id="hostAppBundleId" type="text" placeholder="com.mitchellh.ghostty" />
+      </div>
+      <p>
+        Bundle id of the terminal hosting this session, used only when the plugin
+        cannot work out which application to raise — inside tmux or zellij, or
+        over SSH. The key flashes on any press that has to fall back to it, so a
+        wrong value here announces itself rather than quietly raising the wrong
+        window.
+      </p>
+    </div>
 
     <script>
       // The property inspector protocol, in the small: Stream Deck calls this
@@ -77,9 +96,21 @@
 
       const fields = ["sessionName", "hostAppBundleId"];
 
+      // A missing backend is herdr, which is what every key placed before Rex
+      // existed has.
+      function backend() {
+        return document.getElementById("backend").value;
+      }
+
+      function showBackend() {
+        document.getElementById("herdr").hidden = backend() === "rex";
+        document.getElementById("rex").hidden = backend() !== "rex";
+      }
+
       function save() {
         if (socket === null || socket.readyState !== WebSocket.OPEN) return;
         for (const id of fields) settings[id] = document.getElementById(id).value.trim();
+        settings.backend = backend();
         socket.send(
           JSON.stringify({ event: "setSettings", context: uuid, payload: settings })
         );
@@ -87,7 +118,14 @@
 
       function show() {
         for (const id of fields) document.getElementById(id).value = settings[id] ?? "";
+        document.getElementById("backend").value = settings.backend === "rex" ? "rex" : "herdr";
+        showBackend();
       }
+
+      document.getElementById("backend").addEventListener("change", () => {
+        showBackend();
+        save();
+      });
 
       for (const id of fields) {
         // On `change` rather than on every keystroke: each write reaches the
@@ -98,7 +136,8 @@
 
       function connectElgatoStreamDeckSocket(port, inUUID, registerEvent, _info, actionInfo) {
         uuid = inUUID;
-        settings = JSON.parse(actionInfo).payload.settings ?? {};
+        const info = JSON.parse(actionInfo);
+        settings = info.payload.settings ?? {};
         show();
 
         socket = new WebSocket(`ws://127.0.0.1:${port}`);
