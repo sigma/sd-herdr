@@ -4,7 +4,7 @@
  * is the file a reviewer opens.
  *
  * A Rex fixture is what the poll hands the conversion: the `session.view` and,
- * per terminal block, its status records and title.
+ * per terminal block, its status records.
  */
 import { readFileSync } from "node:fs";
 
@@ -19,7 +19,6 @@ export const REX_FIXTURE_NAMES = [
   "split-tab",
   "floating-layer",
   "nested-records",
-  "unnamed-multi-agent",
 ] as const;
 
 export type RexFixtureName = (typeof REX_FIXTURE_NAMES)[number];

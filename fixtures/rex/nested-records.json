@@ -189,8 +189,7 @@
           "id": "build/test",
           "effective_app": "claude-code"
         }
-      ],
-      "title": "one"
+      ]
     },
     "block:n2": {
       "records": [
@@ -200,8 +199,7 @@
           "app": "claude-code",
           "effective_app": "claude-code"
         }
-      ],
-      "title": "two"
+      ]
     },
     "block:n3": {
       "records": [
@@ -211,8 +209,7 @@
           "app": "claude-code",
           "effective_app": "claude-code"
         }
-      ],
-      "title": "three"
+      ]
     },
     "block:n4": {
       "records": [
@@ -229,8 +226,7 @@
           "app": "claude-code",
           "effective_app": "claude-code"
         }
-      ],
-      "title": "four"
+      ]
     },
     "block:n5": {
       "records": [
@@ -238,12 +234,10 @@
           "state": "blocked",
           "updated_at": "2026-11-06T08:25:00+01:00"
         }
-      ],
-      "title": "five"
+      ]
     },
     "block:n6": {
-      "records": [],
-      "title": "six"
+      "records": []
     }
   }
 }

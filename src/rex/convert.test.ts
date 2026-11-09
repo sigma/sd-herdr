@@ -105,11 +105,9 @@ describe("fromRex: the body label rule", () => {
     expect(labelOf("two-windows", "two-aaaaaaa1")).toBe("api");
   });
 
-  it("names an unnamed window by its agent's terminal title", () => {
-    expect(labelOf("two-windows", "two-bbbbbbb2")).toBe("fix flaky test");
-    expect(labelOf("live-session", "01a1b1e2-0154-773f-bb75-379551e6587e")).toBe(
-      "claude-cave --danger ~/.c/nix",
-    );
+  it("names an unnamed window by its session's label, not its agent's title", () => {
+    expect(labelOf("two-windows", "two-bbbbbbb2")).toBe("work");
+    expect(labelOf("live-session", "01a1b1e2-0154-773f-bb75-379551e6587e")).toBe("nix");
   });
 
   it("compares against the window's own default, not the shape of one", () => {
@@ -126,16 +124,10 @@ describe("fromRex: the body label rule", () => {
     expect(groups?.find((g) => g.groupId === "window:two-aaaaaaa1")?.label).toBe("Window bbbbbbb2");
   });
 
-  it("prefers the focused agent's title in a window holding several", () => {
-    expect(labelOf("unnamed-multi-agent", "multi-fffffff1")).toBe("focused title");
-  });
-
-  it("falls back to the first titled agent when the focused block is no agent", () => {
-    expect(labelOf("unnamed-multi-agent", "multi-fffffff2")).toBe("second window title");
-  });
-
-  it("keeps the default label when no agent has a title", () => {
-    expect(labelOf("unnamed-multi-agent", "multi-fffffff3")).toBe("Window fffffff3");
+  it("keeps the default label when the session has no label either", () => {
+    const { view, reports } = rexWire("two-windows");
+    const groups = fromRex([{ ...view, label: "" }], reports, "i").groups;
+    expect(groups?.find((g) => g.groupId === "window:two-bbbbbbb2")?.label).toBe("Window bbbbbbb2");
   });
 });
 

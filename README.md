@@ -149,8 +149,9 @@ keeps the index until it leaves the attention set (goes `idle` or closes).
 
 The window label on Rex is the name someone gave the window. A window nobody named, one whose
 label is empty or is still Rex's default (`Window` and the last eight characters of its id), is
-labelled from an agent's terminal title instead, the focused block's first. With no titled
-agent it keeps the default label, or shows its id if it has no label at all
+labelled by its session's label instead, never by an agent's terminal title, which is a
+sentence too long to read on a key. With no session label it keeps the default label, or
+shows its id if it has no label at all
 ([the default label rule](CONTEXT.md#rex)).
 
 **The pips are the other waiters**, tier-coloured, in the same priority order, capped at

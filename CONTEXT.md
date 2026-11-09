@@ -364,9 +364,9 @@ _Avoid_: pane (herdr's word for the unit a press focuses), workspace.
 The label Rex gives a window nobody named: `Window ` followed by the last eight characters of its
 `window_id`. The body compares a window's label against that computed string, rather than matching a
 pattern. A window carrying exactly the default string, or no label, is treated as unnamed, and the body
-then uses the title of an agent in it: the focused block's, if it is a titled agent, then the first
-titled agent in document order. A window with no titled agent keeps its default label, which at least
-is stable, or, with no label at all, its id.
+then uses its session's label. Never an agent's terminal title: the agent writes it as a sentence, too
+long to read on a key. With no session label the window keeps its default label, which at least is
+stable, or, with no label at all, its id.
 
 **Program status record**:
 One entry of a terminal block's `program_status`: `state`; `updated_at`, the server's clock in RFC 3339;

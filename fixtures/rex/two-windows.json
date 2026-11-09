@@ -1,7 +1,7 @@
 {
   "provenance": {
     "kind": "derived",
-    "note": "HAND-DERIVED. Two windows in one session. The first is named `api` and holds a blocked agent; the second keeps Rex's default label `Window <last 8 of its id>` and holds a done agent, so the body must name it by its terminal's title. A plain shell with no status sits beside the blocked agent. Timestamps are 08:00 and 09:00, so the blocked agent has waited longer.",
+    "note": "HAND-DERIVED. Two windows in one session. The first is named `api` and holds a blocked agent; the second keeps Rex's default label `Window <last 8 of its id>` and holds a done agent, so the body names it by its session's label. A plain shell with no status sits beside the blocked agent. Timestamps are 08:00 and 09:00, so the blocked agent has waited longer.",
     "derivedFrom": "live-session.json (the captured session.view shape) and the program-status records in docs/research/rex-program-status.md"
   },
   "view": {
@@ -111,12 +111,10 @@
           "app": "claude-code",
           "effective_app": "claude-code"
         }
-      ],
-      "title": "claude"
+      ]
     },
     "block:a2": {
-      "records": [],
-      "title": "fish"
+      "records": []
     },
     "block:b1": {
       "records": [
@@ -126,8 +124,7 @@
           "app": "claude-code",
           "effective_app": "claude-code"
         }
-      ],
-      "title": "fix flaky test"
+      ]
     }
   }
 }

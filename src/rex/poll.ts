@@ -1,6 +1,6 @@
 /**
  * One Rex poll: the server's sessions, then each session's `session.view`, then
- * for every terminal block its program status and its title, concurrently.
+ * for every terminal block its program status, concurrently.
  *
  * A tile speaks for the whole server, so every session is read and the views
  * are merged. Churn during the read is not a failure: a session destroyed
@@ -20,7 +20,6 @@ import {
   type SessionView,
   type StatusRecord,
   TERMINAL_CREATOR,
-  TITLE_METHOD,
 } from "./view.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -33,15 +32,12 @@ export function decodeView(payload: unknown): SessionView {
   return payload as SessionView;
 }
 
-/** Narrow a `program_status` and a `title` result to a block's report. */
-export function decodeReport(status: unknown, title: unknown): BlockReport {
+/** Narrow a `program_status` result to a block's report. */
+export function decodeReport(status: unknown): BlockReport {
   if (!isObject(status) || !Array.isArray(status.records)) {
     throw new RexError("invalid_response", "program_status returned no records");
   }
-  if (!isObject(title) || typeof title.title !== "string") {
-    throw new RexError("invalid_response", "title returned no title");
-  }
-  return { records: status.records as StatusRecord[], title: title.title };
+  return { records: status.records as StatusRecord[] };
 }
 
 /** The terminal blocks of a view, from every layer of every window. */
@@ -66,11 +62,7 @@ async function readBlock(
 ): Promise<[string, BlockReport] | null> {
   const args = { session_id: sessionId, block_id: blockId };
   try {
-    const [status, title] = await Promise.all([
-      client.request(PROGRAM_STATUS_METHOD, args),
-      client.request(TITLE_METHOD, args),
-    ]);
-    return [blockId, decodeReport(status, title)];
+    return [blockId, decodeReport(await client.request(PROGRAM_STATUS_METHOD, args))];
   } catch (err) {
     if (isCode(err, "not_found")) return null;
     if (isCode(err, "session_not_found")) throw new SessionGone();

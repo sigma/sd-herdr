@@ -105,12 +105,10 @@
           "app": "claude-code",
           "effective_app": "claude-code"
         }
-      ],
-      "title": "left"
+      ]
     },
     "block:c2": {
-      "records": [],
-      "title": "shell"
+      "records": []
     },
     "block:c3": {
       "records": [
@@ -120,8 +118,7 @@
           "app": "claude-code",
           "effective_app": "claude-code"
         }
-      ],
-      "title": "right"
+      ]
     }
   }
 }

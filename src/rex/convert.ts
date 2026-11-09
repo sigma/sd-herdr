@@ -85,32 +85,17 @@ function blocksOf(window: ViewWindow): readonly ViewBlock[] {
  * What the body names a window.
  *
  * The window's own label when someone chose it. Rex gives an unnamed window
- * `Window <last 8 of its id>` and shows such a tab under its terminal's title
- * instead, so the body does the same: compared against the string computed from
- * the id, not pattern-matched.
- *
- * A label belongs to a window and a title to a block, so a window holding
- * several agents needs a choice. The window's focused block comes first if it
- * is an agent with a title (it is the terminal the app shows the tab by), then
- * the first agent in document order that has one. A window with no titled agent
- * keeps its default label, which is at least stable.
+ * `Window <last 8 of its id>`, compared against the string computed from the
+ * id, not pattern-matched. An unnamed window takes its session's label
+ * instead: short and chosen by a person, like a herdr workspace label. The
+ * agent's terminal title is not used: it is a sentence the agent writes, too
+ * long to read on a key. With no session label either, the default stays,
+ * which is at least stable.
  */
-function labelOf(window: ViewWindow, agents: ReadonlyMap<string, { title: string }>): string {
+function labelOf(window: ViewWindow, sessionLabel: string): string {
   const label = window.label ?? "";
   if (label !== "" && label !== defaultWindowLabel(window.window_id)) return label;
-
-  const focused = window.focused_block_id ?? null;
-  const candidates = blocksOf(window)
-    .map((block) => block.block_id)
-    .filter((id) => agents.has(id));
-  const ordered =
-    focused !== null && candidates.includes(focused)
-      ? [focused, ...candidates.filter((id) => id !== focused)]
-      : candidates;
-  for (const id of ordered) {
-    const title = agents.get(id)?.title ?? "";
-    if (title !== "") return title;
-  }
+  if (sessionLabel !== "") return sessionLabel;
   return label !== "" ? label : window.window_id;
 }
 
@@ -155,19 +140,19 @@ export function fromRex(
   reports: ReadonlyMap<string, BlockReport>,
   instanceId: string,
 ): Snapshot {
-  const windows = views.flatMap((view) => view.windows ?? []);
+  const windows = views.flatMap((view) =>
+    (view.windows ?? []).map((window) => ({ window, sessionLabel: view.label ?? "" })),
+  );
   const agents: Agent[] = [];
   const groups = [];
   const layouts: TabLayout[] = [];
 
-  for (const window of windows) {
-    const windowAgents = new Map<string, { title: string }>();
+  for (const { window, sessionLabel } of windows) {
     for (const block of blocksOf(window)) {
       const report = reports.get(block.block_id);
       if (report === undefined) continue;
       const collapsed = collapse(report.records);
       if (collapsed === null) continue;
-      windowAgents.set(block.block_id, { title: report.title });
       agents.push({
         paneId: block.block_id,
         tabId: window.window_id,
@@ -175,7 +160,7 @@ export function fromRex(
         ...collapsed,
       });
     }
-    groups.push({ groupId: window.window_id, label: labelOf(window, windowAgents) });
+    groups.push({ groupId: window.window_id, label: labelOf(window, sessionLabel) });
 
     const tiled = (window.layers ?? []).filter((layer) => layer.kind === "tiled");
     if (tiled.length > 0) {

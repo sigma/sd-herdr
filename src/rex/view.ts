@@ -12,9 +12,8 @@
 /** The block creator whose blocks are terminals, and so the only ones with a status. */
 export const TERMINAL_CREATOR = "com.superlogical.terminal";
 
-/** The terminal block methods the poll calls, by their full names. */
+/** The terminal block method the poll calls, by its full name. */
 export const PROGRAM_STATUS_METHOD = `${TERMINAL_CREATOR}.program_status`;
-export const TITLE_METHOD = `${TERMINAL_CREATOR}.title`;
 
 /**
  * One node of a layer's layout tree. A leaf carries `block_id`; an inner node
@@ -51,6 +50,7 @@ export interface ViewWindow {
 
 /** A `session.view` result. */
 export interface SessionView {
+  readonly label?: string;
   readonly windows?: readonly ViewWindow[] | null;
 }
 
@@ -69,6 +69,4 @@ export interface StatusRecord {
 /** What the poll learns about one terminal block, beyond the view. */
 export interface BlockReport {
   readonly records: readonly StatusRecord[];
-  /** The terminal's title; empty when none is set. */
-  readonly title: string;
 }

@@ -104,12 +104,10 @@
           "app": "claude-code",
           "effective_app": "claude-code"
         }
-      ],
-      "title": "main"
+      ]
     },
     "block:d2": {
-      "records": [],
-      "title": "shell"
+      "records": []
     },
     "block:d3": {
       "records": [
@@ -119,8 +117,7 @@
           "app": "claude-code",
           "effective_app": "claude-code"
         }
-      ],
-      "title": "popup"
+      ]
     }
   }
 }

@@ -51,18 +51,17 @@ Derived fixtures carry only the fields their scenario exercises, and say so.
 ## The Rex corpus
 
 `rex/` holds the Rex backend's fixtures, each `{ "provenance", "view", "reports" }`: the
-`session.view` and, per terminal block, the `program_status` records and `title` the poll
+`session.view` and, per terminal block, the `program_status` records the poll
 fetches, so the conversion is tested on exactly what it is handed. The same provenance rule
 applies, and the same test enforces it.
 
 | File | Kind | What it is for |
 |---|---|---|
-| `rex/live-session.json` | captured | A real session with one Claude Code agent, `done`, in an unnamed window. |
+| `rex/live-session.json` | captured | A real session with one Claude Code agent, `done`, in an unnamed window. Its reports also carry the `title` the poll then fetched. |
 | `rex/two-windows.json` | derived | A named window and an unnamed one, a blocked and a done agent. |
 | `rex/split-tab.json` | derived | `agent \| (shell / agent)` as a tree of splits, blocks listed out of geometric order. |
 | `rex/floating-layer.json` | derived | A tiled layer plus a floating one holding a blocked agent. |
 | `rex/nested-records.json` | derived | Root `idle` plus a child `blocked`, `error`, an unknown state, a non-agent record. |
-| `rex/unnamed-multi-agent.json` | derived | Unnamed windows with several agents: which title names the window. |
 
 The captured one is a session that happens to hold a `done` agent. As on herdr, `blocked` and
 `error` cannot be captured on demand.

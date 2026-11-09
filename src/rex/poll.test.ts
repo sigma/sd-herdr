@@ -37,7 +37,6 @@ function serverFor(
       if (method === "session.view") return session.view;
       const report = session.reports.get(block_id ?? "");
       if (method.endsWith(".program_status")) return { records: report?.records ?? [] };
-      if (method.endsWith(".title")) return { title: report?.title ?? "" };
       throw new Error(`unexpected ${method}`);
     },
   };
@@ -45,7 +44,7 @@ function serverFor(
 }
 
 describe("pollServer", () => {
-  it("lists the sessions, views each, then asks each terminal block for its status and title", async () => {
+  it("lists the sessions, views each, then asks each terminal block for its status", async () => {
     const { client, calls } = serverFor("two-windows");
     const S = "session:two-windows";
     const snapshot = await pollServer(client);
@@ -54,12 +53,7 @@ describe("pollServer", () => {
     expect(calls[1]).toEqual({ method: "session.view", payload: { session_id: S } });
     const rest = calls.slice(2).map((c) => `${c.method} ${c.payload.block_id}`);
     expect(rest.sort()).toEqual(
-      ["a1", "a2", "b1"]
-        .flatMap((b) => [
-          `com.superlogical.terminal.program_status block:${b}`,
-          `com.superlogical.terminal.title block:${b}`,
-        ])
-        .sort(),
+      ["a1", "a2", "b1"].map((b) => `com.superlogical.terminal.program_status block:${b}`),
     );
     for (const call of calls.slice(2)) expect(call.payload.session_id).toBe(S);
     expect(snapshot.agents.map((a) => a.paneId)).toEqual(["block:a1", "block:b1"]);
@@ -72,7 +66,7 @@ describe("pollServer", () => {
       ...rexFixture("two-windows").agents.map((a) => a.paneId),
       ...rexFixture("floating-layer").agents.map((a) => a.paneId),
     ]);
-    const asked = calls.filter((c) => c.method.endsWith(".title"));
+    const asked = calls.filter((c) => c.method.endsWith(".program_status"));
     for (const call of asked) {
       const name = String(call.payload.session_id).slice("session:".length) as FixtureName;
       expect(rexWire(name).reports.has(String(call.payload.block_id))).toBe(true);
@@ -90,7 +84,7 @@ describe("pollServer", () => {
 
   it("skips a session destroyed while its blocks are read", async () => {
     const { client } = serverFor(["two-windows", "floating-layer"], (method, session) =>
-      method.endsWith(".title") && session === "session:floating-layer"
+      method.endsWith(".program_status") && session === "session:floating-layer"
         ? new RexError("session_not_found", "gone")
         : null,
     );
@@ -146,7 +140,7 @@ describe("pollServer", () => {
 
   it("rejects the snapshot when any other call fails", async () => {
     const { client } = serverFor("two-windows", (m) =>
-      m.endsWith(".title") ? new RexError("timeout", "no answer") : null,
+      m.endsWith(".program_status") ? new RexError("timeout", "no answer") : null,
     );
     await expect(pollServer(client)).rejects.toMatchObject({ code: "timeout" });
   });
@@ -164,9 +158,8 @@ describe("decoding", () => {
     expect(() => decodeView(null)).toThrow(RexError);
   });
 
-  it("rejects a status or title result of the wrong shape", () => {
-    expect(() => decodeReport({}, { title: "" })).toThrow(/records/);
-    expect(() => decodeReport({ records: [] }, {})).toThrow(/title/);
-    expect(decodeReport({ records: [] }, { title: "t" })).toEqual({ records: [], title: "t" });
+  it("rejects a status result of the wrong shape", () => {
+    expect(() => decodeReport({})).toThrow(/records/);
+    expect(decodeReport({ records: [] })).toEqual({ records: [] });
   });
 });
