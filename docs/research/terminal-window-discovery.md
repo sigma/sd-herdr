@@ -1,6 +1,6 @@
 # Finding and raising the terminal window that hosts a herdr client
 
-Research for [#3](https://github.com/sigma/sd-herdr/issues/3) (map: [#1](https://github.com/sigma/sd-herdr/issues/1)).
+Research for [#3](https://github.com/sigma/sd-mux/issues/3) (map: [#1](https://github.com/sigma/sd-mux/issues/1)).
 
 Every claim below is tagged **VERIFIED** (command run on this machine, output observed) or
 **INFERRED** (reasoned from schema, `sdef`, entitlements, or documented platform behaviour, not

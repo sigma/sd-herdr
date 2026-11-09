@@ -1,6 +1,6 @@
 # Does the first-run Automation prompt reach an `LSUIElement` plugin?
 
-Research for [sigma/sd-herdr#11](https://github.com/sigma/sd-herdr/issues/11) (map: #1).
+Research for [sigma/sd-mux#11](https://github.com/sigma/sd-mux/issues/11) (map: #1).
 Closes the one bullet [window-raise-multiwindow.md §4](window-raise-multiwindow.md) could not
 resolve by execution, and revises its central inference.
 

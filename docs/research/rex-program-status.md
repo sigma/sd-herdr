@@ -1,7 +1,7 @@
 # The lifecycle of a Rex program-status record
 
-Research for [sigma/sd-herdr#31](https://github.com/sigma/sd-herdr/issues/31) (map:
-[#29](https://github.com/sigma/sd-herdr/issues/29)).
+Research for [sigma/sd-mux#31](https://github.com/sigma/sd-mux/issues/31) (map:
+[#29](https://github.com/sigma/sd-mux/issues/29)).
 
 **Subject**: Rex server `0.0.1793890641-gaf0c20`, API revision 11, fish shell in the scratch
 terminal; Claude Code as the agent under observation. Protocol reference: the
@@ -48,7 +48,7 @@ to stop showing them, for example when the user returns to the terminal and pres
 program reports again or clears it.
 
 **Consequence for the design.** On herdr, focusing a `done` agent turns it `idle` — the
-`done` tier is *self-consuming* ([#6](https://github.com/sigma/sd-herdr/issues/6)), which is
+`done` tier is *self-consuming* ([#6](https://github.com/sigma/sd-mux/issues/6)), which is
 why only the `blocked` tier needs a visited set. **On Rex, a press does not consume `done`.**
 The agent leaves `done` when the user gives it its next instruction (Claude Code then
 reports `working`, §4), not when the button takes them there. If nothing else changes, a

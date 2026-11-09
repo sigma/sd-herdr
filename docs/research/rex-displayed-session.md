@@ -1,7 +1,7 @@
 # Can the plugin see which session the Rex app is displaying?
 
-Research for [sigma/sd-herdr#34](https://github.com/sigma/sd-herdr/issues/34) (map:
-[#29](https://github.com/sigma/sd-herdr/issues/29)).
+Research for [sigma/sd-mux#34](https://github.com/sigma/sd-mux/issues/34) (map:
+[#29](https://github.com/sigma/sd-mux/issues/29)).
 
 **Subject**: Rex server `0.0.1793890641-gaf0c20` (API revision 11), Rex Beta app
 `0.1.0 (1829)` with one app window. The app was switched between sessions with

@@ -1,6 +1,6 @@
 # How a Node client speaks the herdr socket API
 
-Research for [sigma/sd-herdr#2](https://github.com/sigma/sd-herdr/issues/2) (map: #1).
+Research for [sigma/sd-mux#2](https://github.com/sigma/sd-mux/issues/2) (map: #1).
 
 **Subject**: herdr `0.8.0`, protocol `19`, macOS (darwin 25.5.0), Node `v26.7.0`.
 

@@ -1,6 +1,6 @@
 # Does a *detected* agent re-establish itself after a server lifetime boundary?
 
-Measurements taken while resolving [sigma/sd-herdr#13](https://github.com/sigma/sd-herdr/issues/13)
+Measurements taken while resolving [sigma/sd-mux#13](https://github.com/sigma/sd-mux/issues/13)
 (map: #1). Amends [herdr-restart-settling.md](herdr-restart-settling.md) §3–§4, which
 established that *reported* agent state never repopulates, and closes the `[U]` left by
 [herdr-focus-contract.md](herdr-focus-contract.md) §6 and §9.

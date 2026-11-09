@@ -1,6 +1,6 @@
 # The herdr focus contract, and what focusing a `done` agent really does
 
-Research for [sigma/sd-herdr#6](https://github.com/sigma/sd-herdr/issues/6) (map: #1).
+Research for [sigma/sd-mux#6](https://github.com/sigma/sd-mux/issues/6) (map: #1).
 Builds on [herdr-socket-api.md](herdr-socket-api.md), which left every claim in this
 document marked `[U]` because probing was confined to read-only calls against the
 user's live session.

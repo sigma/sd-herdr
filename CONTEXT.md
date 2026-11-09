@@ -3,8 +3,8 @@
 A Stream Deck button that surfaces whether any agent in a [herdr](https://github.com/ogulcancelik/herdr)
 session or a Rex server needs attention, and on press takes the user to the most urgent one. This
 glossary is the vocabulary the design decisions on
-[map #1](https://github.com/sigma/sd-herdr/issues/1) and
-[map #29](https://github.com/sigma/sd-herdr/issues/29) are argued in.
+[map #1](https://github.com/sigma/sd-mux/issues/1) and
+[map #29](https://github.com/sigma/sd-mux/issues/29) are argued in.
 
 It has three layers. The **neutral layer** is shared by every backend and uses only backend-neutral
 words. **herdr** and **Rex** each hold the terms of one backend. A term from one backend's section
@@ -83,7 +83,7 @@ key; the core never reads it as a time.
 
 **Top-priority agent**:
 The head of the attention set under priority order, ignoring the visited set. Stable — and *not* what
-the tile names ([#12](https://github.com/sigma/sd-herdr/issues/12)). It survives only as the thing the
+the tile names ([#12](https://github.com/sigma/sd-mux/issues/12)). It survives only as the thing the
 state colour speaks for: focusing a `blocked` agent consumes nothing, so this one can sit at the head
 untouched for a whole cycle.
 
@@ -96,7 +96,7 @@ One rank of the priority order. The tiers differ mechanically, not just in urgen
 **Press**:
 One activation of the button. Its contract is *"put the cursor in the most urgent agent"*: focus that
 agent's unit, then raise the window that shows it. What a press must deliver is that the agent is
-**typeable**, not merely visible ([#15](https://github.com/sigma/sd-herdr/issues/15)); "show me the
+**typeable**, not merely visible ([#15](https://github.com/sigma/sd-mux/issues/15)); "show me the
 tab holding the most urgent agent" was the earlier reading, and it is the visibility framing that
 made tab-granular stepping look correct. Still never "advance to the next agent": on herdr, a press
 can consume several `done` agents at once (see **Tab-scoped consumption**).
@@ -119,7 +119,7 @@ _Avoid_: seen (herdr's flag).
 
 **Stepping**:
 How selection advances press to press: per agent unit, over the visited set
-([#15](https://github.com/sigma/sd-herdr/issues/15)). Focus lands on one unit, so two agents placed
+([#15](https://github.com/sigma/sd-mux/issues/15)). Focus lands on one unit, so two agents placed
 in one tab need two presses — that second press is not waste, it is the only way to get the cursor
 into the second agent.
 _Avoid_: tab-granular stepping, ranked tabs, exhausted tab — all deleted with the visibility framing
@@ -132,11 +132,11 @@ returns to the top of the priority order.
 **Next press target**:
 The highest-priority agent not in the visited set — where the button will actually take the user.
 Equal to the top-priority agent at the start of a cycle, and divergent from it thereafter. **This is
-what the tile's body names** ([#12](https://github.com/sigma/sd-herdr/issues/12)): the body follows the
+what the tile's body names** ([#12](https://github.com/sigma/sd-mux/issues/12)): the body follows the
 button, the state colour keeps urgency. Naming the top-priority agent instead leaves the tile inert
 for an entire cycle of `blocked` agents, since none of them are consumed by being shown. It is drawn
 as the target's group label, plus a **position index** when the target has an **attention sibling**
-([#16](https://github.com/sigma/sd-herdr/issues/16)).
+([#16](https://github.com/sigma/sd-mux/issues/16)).
 
 **Attention sibling**:
 Another attention agent in the target's tab. Its presence is what makes a group label ambiguous, and
@@ -173,10 +173,10 @@ cannot see the session), a session nameplate, a label for the *next press target
 dots for the other waiters. The colours read as a traffic light — red stopped, amber running, green
 arrived — so green is the finished tier and amber the one still in flight. The label is the target's
 group, plus a *position index* when an attention sibling shares its tab
-([#16](https://github.com/sigma/sd-herdr/issues/16)). The three speak different axes and are allowed
+([#16](https://github.com/sigma/sd-mux/issues/16)). The three speak different axes and are allowed
 to disagree — colour is the whole session, the label is where the next press goes, the dots are
 everyone else still waiting. In particular a red bar over a green-tier label is correct, not a bug
-([#12](https://github.com/sigma/sd-herdr/issues/12)).
+([#12](https://github.com/sigma/sd-mux/issues/12)).
 
 **Pips**:
 The tier-coloured dots for the **other** waiters — everyone in the attention set the body does not
@@ -227,7 +227,7 @@ The grey hold after a *server lifetime* boundary, before the face is trusted aga
 backend's `settleMs`: **4 s** on herdr, where the snapshot can say dark while the data is untrustworthy
 for ~3.7 s, and **none** on Rex, where a restart leaves nothing to wait for. It is the one place the
 plugin deliberately overrides its own data. herdr's value is sized for its live handoff's measured worst
-case ([#13](https://github.com/sigma/sd-herdr/issues/13)), because the handoff and the stop/restart look
+case ([#13](https://github.com/sigma/sd-mux/issues/13)), because the handoff and the stop/restart look
 the same when they happen. **Decoupled** from the staleness deadline, which answers a
 different question. Ends on a fixed timer — after a restart a dark face is honest, since a server whose
 agent processes are dead genuinely has none.
@@ -251,14 +251,14 @@ _Avoid_: read, acknowledged, dismissed.
 **Derived done**:
 herdr does not report `done` as a state. It derives `done` from `(idle, seen = false)`, so a herdr
 agent can only be `done` in the outbound direction, and focusing one turns it `idle`. That is why the
-`done` tier is self-consuming on herdr ([#6](https://github.com/sigma/sd-herdr/issues/6)), and why only
+`done` tier is self-consuming on herdr ([#6](https://github.com/sigma/sd-mux/issues/6)), and why only
 `blocked` needs the visited set there.
 
 **Live handoff**:
 A lifetime boundary that keeps the agents: herdr hands its panes to a new server without killing them.
 Its boundary is observable, since every pane's `terminal_id` is regenerated while its `pane_id` stays
 put. A stop/restart is the other shape. It kills the agents, and the two cannot be told apart at the
-moment they happen ([#13](https://github.com/sigma/sd-herdr/issues/13)). So one policy has to cover
+moment they happen ([#13](https://github.com/sigma/sd-mux/issues/13)). So one policy has to cover
 both, sized for the handoff.
 
 **Re-detection**:
@@ -276,7 +276,7 @@ herdr's `mark_active_tab_seen()`, clearing `seen` on **every** pane in that tab.
 every `done` agent in the target's tab. Its accepted consequence — **a second `done` agent in a tab is
 unreachable by button**, since focusing its neighbour consumes it first. `blocked` is unaffected, being
 a reported state rather than `idle + !seen`. The face gives **no warning** before it happens
-([#16](https://github.com/sigma/sd-herdr/issues/16)): the cost is one the user cannot avoid, so drawing
+([#16](https://github.com/sigma/sd-mux/issues/16)): the cost is one the user cannot avoid, so drawing
 it would spend the pip row's last free axis to no end. The pips' hollow-vs-filled axis stays
 deliberately unused. This does not apply on Rex, where focus changes no status.
 
@@ -290,7 +290,7 @@ _Avoid_: agent index, pane number (that is the id's suffix, an unrelated counter
 **sessionName**:
 The per-button setting naming the herdr session a tile speaks for, defaulting to `default`. It is
 resolved to a socket path by herdr's on-disk *convention* rather than by `herdr session list`
-([#20](https://github.com/sigma/sd-herdr/issues/20)): the listing needs the `herdr` binary, which is not
+([#20](https://github.com/sigma/sd-mux/issues/20)): the listing needs the `herdr` binary, which is not
 on a plugin's PATH, and "is it running" is better answered by connecting. The socket path is the
 session key. Changing the name repoints the button, which re-resolves the socket and starts the cycle
 over.
@@ -330,7 +330,7 @@ peer returns the daemon).
 
 **`hostAppBundleId`**:
 The per-button setting naming the application to raise when host-app discovery cannot. Defaults to
-`com.mitchellh.ghostty` ([#27](https://github.com/sigma/sd-herdr/issues/27)), which is safe only because
+`com.mitchellh.ghostty` ([#27](https://github.com/sigma/sd-mux/issues/27)), which is safe only because
 its use is **surfaced**: every press that leans on it flashes the key and logs the rung, since a silent
 permanent fallback is how a broken walk goes unnoticed for months. The default is what makes that alert
 load-bearing rather than decorative — on a machine running some other terminal, rung 3 will `open` the

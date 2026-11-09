@@ -1,6 +1,6 @@
 # What a Stream Deck plugin process can actually do
 
-Research for [sigma/sd-herdr#19](https://github.com/sigma/sd-herdr/issues/19) (spec: #17).
+Research for [sigma/sd-mux#19](https://github.com/sigma/sd-mux/issues/19) (spec: #17).
 
 **Subject**: Elgato Stream Deck `7.4.2.22730` on macOS `26.5.2` (darwin 25.5.0), bundled
 Node `v20.20.0`, plugin `dev.yrh.sd-herdr` `0.1.0.0` linked from the repo checkout.

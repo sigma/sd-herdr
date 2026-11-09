@@ -1,7 +1,7 @@
 # Does the window-nonce raise hold up outside the single-window happy path?
 
-Research for [#5](https://github.com/sigma/sd-herdr/issues/5) (map: [#1](https://github.com/sigma/sd-herdr/issues/1)),
-following on from [#3](https://github.com/sigma/sd-herdr/issues/3) /
+Research for [#5](https://github.com/sigma/sd-mux/issues/5) (map: [#1](https://github.com/sigma/sd-mux/issues/1)),
+following on from [#3](https://github.com/sigma/sd-mux/issues/3) /
 [`terminal-window-discovery.md`](./terminal-window-discovery.md).
 
 Every claim below is tagged **VERIFIED** (command run on this machine, output observed) or
@@ -459,7 +459,7 @@ Additional contract-shaping facts:
 3. **`pane.report_agent` cannot report `done`.** VERIFIED: the write-side enum is
    `idle | working | blocked | unknown` — `done` is rejected with `unknown variant \`done\``, even
    though the read-side `AgentStatus` includes it. So `done` is a state herdr *derives*, not one an
-   integration asserts. This bears directly on [#6](https://github.com/sigma/sd-herdr/issues/6)'s
+   integration asserts. This bears directly on [#6](https://github.com/sigma/sd-mux/issues/6)'s
    premise that focusing a `done` agent flips it to `idle`, and it constrains how #6 can be tested —
    a `done` agent cannot be synthesised over the socket.
 4. **Multiple simultaneous clients on one session may be unreachable.** §3.2: a second

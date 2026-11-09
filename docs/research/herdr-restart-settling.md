@@ -1,6 +1,6 @@
 # What a herdr restart looks like to a polling client
 
-Measurements taken while resolving [sigma/sd-herdr#9](https://github.com/sigma/sd-herdr/issues/9)
+Measurements taken while resolving [sigma/sd-mux#9](https://github.com/sigma/sd-mux/issues/9)
 (map: #1). Extends [herdr-focus-contract.md](herdr-focus-contract.md) §6–§7, which
 established *that* agent state is lost across a restart but not what a polling client
 observes while it happens.
@@ -40,7 +40,7 @@ that is already being polled — no extra call, no heuristic. Keyed by `pane_id`
 unambiguous: a genuinely new pane brings a new `pane_id` too.
 
 It is strictly better than the `state_change_seq`-regression rule adopted in
-[#7](https://github.com/sigma/sd-herdr/issues/7), which fails in two observed cases —
+[#7](https://github.com/sigma/sd-mux/issues/7), which fails in two observed cases —
 when every agent vanishes there is no seq left to regress, and a restart of a session
 whose max seq was already 0 moves nothing.
 
@@ -87,7 +87,7 @@ agents.
 re-establishes itself after a restart or handoff, and how quickly. This is the same gap
 herdr-focus-contract.md left open, and it is now the one input that would justify
 lengthening the settle window. Tracked as
-[#13](https://github.com/sigma/sd-herdr/issues/13).
+[#13](https://github.com/sigma/sd-mux/issues/13).
 
 ## 4. Consequences for the sd-herdr spec
 

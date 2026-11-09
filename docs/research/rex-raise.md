@@ -1,7 +1,7 @@
 # How a press focuses a Rex block and brings it forward
 
-Research for [sigma/sd-herdr#33](https://github.com/sigma/sd-herdr/issues/33) (map:
-[#29](https://github.com/sigma/sd-herdr/issues/29)).
+Research for [sigma/sd-mux#33](https://github.com/sigma/sd-mux/issues/33) (map:
+[#29](https://github.com/sigma/sd-mux/issues/29)).
 
 **Subject**: Rex server `0.0.1793890641-gaf0c20` (API revision 11), Rex Beta app
 `0.1.0 (1829)` with **one** app window, AeroSpace, macOS. Driven from a throwaway session
@@ -55,7 +55,7 @@ phone) was not tested; a local one is recognisable by `principal.transport == "u
 - The Rex window's title is **`<tab label> - <session label>`** for whatever it displays
   (`agent - sd-herdr`, then `other - sd-herdr` after selecting W2), so AeroSpace finds it
   after step 2 by matching the title's suffix. That is herdr's nonce trick
-  ([#3](https://github.com/sigma/sd-herdr/issues/3), [#5](https://github.com/sigma/sd-herdr/issues/5))
+  ([#3](https://github.com/sigma/sd-mux/issues/3), [#5](https://github.com/sigma/sd-mux/issues/5))
   with nothing to write: Rex puts the session in the title by itself. Session labels are
   not unique, though, and Rex changes them on its own (see
   [rex-displayed-session.md](rex-displayed-session.md)), so a match is only reliable with one
@@ -67,8 +67,8 @@ phone) was not tested; a local one is recognisable by `principal.transport == "u
 **Recommendation**: `open -b com.superlogical.rex` after `session.select`, and no AppleScript
 rung. If several Rex windows turn out to matter, add the AeroSpace title match before it.
 None of it needs an Automation grant, so the TCC analysis of
-[#11](https://github.com/sigma/sd-herdr/issues/11) and
-[#14](https://github.com/sigma/sd-herdr/issues/14) does not apply to the Rex backend.
+[#11](https://github.com/sigma/sd-mux/issues/11) and
+[#14](https://github.com/sigma/sd-mux/issues/14) does not apply to the Rex backend.
 
 ## 4. Failure modes
 

@@ -1,7 +1,7 @@
 # How a Node client speaks the Rex control API
 
-Research for [sigma/sd-herdr#30](https://github.com/sigma/sd-herdr/issues/30) (map:
-[#29](https://github.com/sigma/sd-herdr/issues/29)).
+Research for [sigma/sd-mux#30](https://github.com/sigma/sd-mux/issues/30) (map:
+[#29](https://github.com/sigma/sd-mux/issues/29)).
 
 **Subject**: Rex server `0.0.1793890641-gaf0c20` (commit `af0c204`), API revision `11`
 (server speaks 0–11), Rex Beta app `0.1.0 (1829)`, macOS, Node `v24.18.0`, `ws@8.21.3`.
@@ -94,7 +94,7 @@ Research for [sigma/sd-herdr#30](https://github.com/sigma/sd-herdr/issues/30) (m
 - **[V]** Cost of one full poll — `session.list`, `session.view` per session, and
   `program_status` per terminal block, issued concurrently per session — on 4 sessions /
   4 terminal blocks: **~1.2–1.7 ms and ~3.9 KB**, over one already-open connection. herdr's
-  `session.snapshot` cost ~110 ms / 15 KB per call ([#2](https://github.com/sigma/sd-herdr/issues/2)).
+  `session.snapshot` cost ~110 ms / 15 KB per call ([#2](https://github.com/sigma/sd-mux/issues/2)).
   Polling every second is therefore free; the cost scales with one call per terminal block.
 
 ## 4. Program status
@@ -104,7 +104,7 @@ Research for [sigma/sd-herdr#30](https://github.com/sigma/sd-herdr/issues/30) (m
   `app`, `effective_app`, `kind`, `progress`, `title`, `msg`, `owner {pid, name}`. Claude
   Code reports on the root record as `app: "claude-code"`.
 - The reporting side is the [Program Status Protocol (OSC 7501)](https://www.superlogical.com/rex/docs/build/program-status.md).
-  Lifecycle questions — what clears `done` — belong to [#31](https://github.com/sigma/sd-herdr/issues/31).
+  Lifecycle questions — what clears `done` — belong to [#31](https://github.com/sigma/sd-mux/issues/31).
 
 ## 5. Push vs poll
 
@@ -127,7 +127,7 @@ Research for [sigma/sd-herdr#30](https://github.com/sigma/sd-herdr/issues/30) (m
 - **[D]** Unlike herdr's subscriptions, the event stream is **gap-free**: `seq` starts at 1
   and goes up by one; each response carries the `seq` of the last event already reflected
   in it; and the server *closes* the connection (1008 `event backlog exceeded`, past 8 MiB)
-  rather than skip one. Every reason [#7](https://github.com/sigma/sd-herdr/issues/7) gave
+  rather than skip one. Every reason [#7](https://github.com/sigma/sd-mux/issues/7) gave
   for dropping herdr subscriptions — per-pane only, silently mute on pane death, no way to
   tell a missed event — is absent here.
 - **Recommendation**: keep the 1 s poll for v1. It costs ~1 ms, it reuses the existing
@@ -171,7 +171,7 @@ Research for [sigma/sd-herdr#30](https://github.com/sigma/sd-herdr/issues/30) (m
 | Session destroyed | `error {code: "session_not_found", status: 404}` **[V]** |
 | Session named before attaching | `error {code: "conflict"}` **[V]** |
 | Client fell 8 MiB of events behind | close 1008 `event backlog exceeded` **[D]** |
-| Server restart | not measured here; [#32](https://github.com/sigma/sd-herdr/issues/32) |
+| Server restart | not measured here; [#32](https://github.com/sigma/sd-mux/issues/32) |
 
 Every one of these maps to grey. None needs a new state.
 
@@ -189,4 +189,4 @@ Every one of these maps to grey. None needs a new state.
   `window:01a1…`, `block:01a1…`), so ids from different sessions do not collide.
 - `server.status.instance_id` (`afc3ce9e-…`, alongside `started_at` and `pid`) is a
   candidate server-lifetime marker, to be confirmed in
-  [#32](https://github.com/sigma/sd-herdr/issues/32).
+  [#32](https://github.com/sigma/sd-mux/issues/32).

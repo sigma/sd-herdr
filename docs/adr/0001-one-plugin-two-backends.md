@@ -2,8 +2,8 @@
 
 - **Status:** accepted
 - **Date:** 2026-11-06
-- **Decided on:** [map #29](https://github.com/sigma/sd-herdr/issues/29)
-- **Specified in:** [spec #35](https://github.com/sigma/sd-herdr/issues/35)
+- **Decided on:** [map #29](https://github.com/sigma/sd-mux/issues/29)
+- **Specified in:** [spec #35](https://github.com/sigma/sd-mux/issues/35)
 
 ## Context
 
@@ -48,18 +48,18 @@ nothing else in it changed. A Rex tile has no session setting, and its plate is 
 The map records the other decisions taken with this one. One bears on the seam: the press keeps the
 plugin's own cycle on both backends rather than using Rex's own `agent_jump` action, because that
 action's order is not guaranteed to match the body and the pips. See
-[map #29](https://github.com/sigma/sd-herdr/issues/29).
+[map #29](https://github.com/sigma/sd-mux/issues/29).
 
 ## Reasons
 
 - The seam was nearly there. The core touched herdr through two imports only, the `Snapshot` type and
   `DEFAULT_SESSION`, and all herdr I/O was wired in `src/actions/attention-action.ts`, so a backend
-  seam cost less than a copy ([map #29](https://github.com/sigma/sd-herdr/issues/29), [spec #35](https://github.com/sigma/sd-herdr/issues/35)).
+  seam cost less than a copy ([map #29](https://github.com/sigma/sd-mux/issues/29), [spec #35](https://github.com/sigma/sd-mux/issues/35)).
 - One pure core keeps every policy decision in one tested place, and each backend's conversion into
   it is a pure function tested on its own fixtures, so a protocol change shows up as a failing
-  conversion test rather than as drift in the policy ([spec #35](https://github.com/sigma/sd-herdr/issues/35), user stories 15 and 16).
+  conversion test rather than as drift in the policy ([spec #35](https://github.com/sigma/sd-mux/issues/35), user stories 15 and 16).
 - One habit works whichever multiplexer an agent runs in, and a herdr tile and a Rex tile can sit side
-  by side, each speaking for one session ([spec #35](https://github.com/sigma/sd-herdr/issues/35), user stories 1 and 2).
+  by side, each speaking for one session ([spec #35](https://github.com/sigma/sd-mux/issues/35), user stories 1 and 2).
 
 ## Consequences
 
@@ -75,8 +75,8 @@ action's order is not guaranteed to match the body and the pips. See
 
 ## Links
 
-- Map: [#29](https://github.com/sigma/sd-herdr/issues/29)
-- Spec: [#35](https://github.com/sigma/sd-herdr/issues/35)
+- Map: [#29](https://github.com/sigma/sd-mux/issues/29)
+- Spec: [#35](https://github.com/sigma/sd-mux/issues/35)
 - Vocabulary: [`CONTEXT.md`](../../CONTEXT.md)
 - Research: [`rex-control-api.md`](../research/rex-control-api.md),
   [`rex-program-status.md`](../research/rex-program-status.md),

@@ -1,7 +1,7 @@
 # What survives a Rex server restart
 
-Research for [sigma/sd-herdr#32](https://github.com/sigma/sd-herdr/issues/32) (map:
-[#29](https://github.com/sigma/sd-herdr/issues/29)).
+Research for [sigma/sd-mux#32](https://github.com/sigma/sd-mux/issues/32) (map:
+[#29](https://github.com/sigma/sd-mux/issues/29)).
 
 **Subject**: Rex server `0.0.1793890641-gaf0c20`, API revision 11. Measured on an
 **isolated server**, never the user's:
@@ -42,11 +42,11 @@ server; nothing found suggests they behave differently.
 
 ## 2. Compared with herdr
 
-herdr has two boundary shapes ([#9](https://github.com/sigma/sd-herdr/issues/9),
-[#13](https://github.com/sigma/sd-herdr/issues/13)): a **stop/restart** kills the agents
+herdr has two boundary shapes ([#9](https://github.com/sigma/sd-mux/issues/9),
+[#13](https://github.com/sigma/sd-mux/issues/13)): a **stop/restart** kills the agents
 and nothing comes back, and a **live handoff** keeps them and re-detects them over ~3.7 s,
 which is why the tile holds grey for 4 s on a `terminal_id` change
-([#26](https://github.com/sigma/sd-herdr/issues/26)).
+([#26](https://github.com/sigma/sd-mux/issues/26)).
 
 Rex has only the first shape. Nothing repopulates after a restart, because the agent
 processes are dead and Rex keeps no record of them. **A dark tile after a Rex restart is

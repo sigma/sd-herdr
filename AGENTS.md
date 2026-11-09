@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Issues live as GitHub issues in `sigma/sd-herdr`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live as GitHub issues in `sigma/sd-mux`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

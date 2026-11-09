@@ -4,9 +4,9 @@ A Stream Deck button that surfaces whether any agent in a
 [herdr](https://github.com/ogulcancelik/herdr) session or a Rex server needs attention,
 and on press walks you through them, one press per agent.
 
-The herdr design is specified in [#17](https://github.com/sigma/sd-herdr/issues/17). The
-two-backend design is in [#35](https://github.com/sigma/sd-herdr/issues/35), decided on
-[map #29](https://github.com/sigma/sd-herdr/issues/29), and the choice to keep one project
+The herdr design is specified in [#17](https://github.com/sigma/sd-mux/issues/17). The
+two-backend design is in [#35](https://github.com/sigma/sd-mux/issues/35), decided on
+[map #29](https://github.com/sigma/sd-mux/issues/29), and the choice to keep one project
 is recorded in [ADR 0001](docs/adr/0001-one-plugin-two-backends.md). The vocabulary is in
 [`CONTEXT.md`](CONTEXT.md).
 
